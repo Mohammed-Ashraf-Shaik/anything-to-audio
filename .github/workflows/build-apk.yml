@@ -1,0 +1,105 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "Choose APK Build Type (release or debug)"
+        required: true
+        default: "release"
+        type: choice
+        options:
+          - release
+          - debug
+          - both
+  push:
+    branches:
+      - main
+    paths:
+      - "mobile/**"
+      - ".github/workflows/build-apk.yml"
+
+jobs:
+  build-apk:
+    name: Build Standalone Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ☕ Setup Java Development Kit (JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: 🤖 Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 🟢 Setup Node.js (v20)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: ⚡ Cache Gradle Dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('mobile/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: 📦 Install NPM Dependencies
+        working-directory: ./mobile
+        run: |
+          npm install --legacy-peer-deps
+
+      - name: 🏗️ Prebuild Native Android Project
+        working-directory: ./mobile
+        run: |
+          npx expo prebuild --platform android --clean
+
+      - name: 🔨 Build Android APK with Gradle
+        working-directory: ./mobile/android
+        run: |
+          chmod +x gradlew
+          BUILD_CHOICE="${{ github.event.inputs.build_type || 'release' }}"
+          echo "Selected Build Type: $BUILD_CHOICE"
+
+          if [ "$BUILD_CHOICE" = "release" ] || [ "$BUILD_CHOICE" = "both" ]; then
+            echo "--- Building Release APK ---"
+            ./gradlew assembleRelease --no-daemon
+
+            # Sign the release APK with a generated standalone keystore for direct installation
+            KEYSTORE="standalone-release.keystore"
+            keytool -genkey -v -keystore "$KEYSTORE" -alias sonicid -keyalg RSA -keysize 2048 -validity 10000 -storepass sonicid123 -keypass sonicid123 -dname "CN=SonicID, OU=Mobile, O=SonicID, C=US"
+            
+            APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
+            echo "Using apksigner at: $APKSIGNER"
+
+            RELEASE_DIR="app/build/outputs/apk/release"
+            if [ -f "$RELEASE_DIR/app-release-unsigned.apk" ]; then
+              $APKSIGNER sign --ks "$KEYSTORE" --ks-pass pass:sonicid123 --out "$RELEASE_DIR/SonicID-v1.0.0-Release.apk" "$RELEASE_DIR/app-release-unsigned.apk"
+              echo "Signed release APK generated: SonicID-v1.0.0-Release.apk"
+            elif [ -f "$RELEASE_DIR/app-release.apk" ]; then
+              cp "$RELEASE_DIR/app-release.apk" "$RELEASE_DIR/SonicID-v1.0.0-Release.apk"
+            fi
+          fi
+
+          if [ "$BUILD_CHOICE" = "debug" ] || [ "$BUILD_CHOICE" = "both" ]; then
+            echo "--- Building Debug APK ---"
+            ./gradlew assembleDebug --no-daemon
+            cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/SonicID-v1.0.0-Debug.apk
+          fi
+
+      - name: 📤 Upload Installable APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SonicID-Android-APK
+          path: |
+            mobile/android/app/build/outputs/apk/release/SonicID-*.apk
+            mobile/android/app/build/outputs/apk/debug/SonicID-*.apk
+          retention-days: 30
