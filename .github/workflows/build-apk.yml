@@ -37,7 +37,6 @@ jobs:
       - name: 🤖 Accept Android SDK Licenses
         run: |
           echo "Using pre-installed Android SDK at $ANDROID_HOME"
-          # Accept all Android licenses non-interactively
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: 🟢 Setup Node.js (v20)
@@ -55,10 +54,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: 📦 Install NPM Dependencies
+      - name: 📦 Install Dependencies
         working-directory: ./mobile
         run: |
           npm install --legacy-peer-deps
+          npx expo install --fix
 
       - name: 🏗️ Prebuild Native Android Project
         working-directory: ./mobile
@@ -69,14 +69,24 @@ jobs:
         working-directory: ./mobile/android
         run: |
           chmod +x gradlew
+          
+          # Pass node_modules path so Gradle's subshells resolve React Native modules in monorepo
+          export NODE_PATH="$(cd .. && pwd)/node_modules"
+          export PATH="$(cd .. && pwd)/node_modules/.bin:$PATH"
+
+          # Optimize Gradle properties for CI build stability
+          echo "newArchEnabled=false" >> gradle.properties
+          echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> gradle.properties
+
           BUILD_CHOICE="${{ github.event.inputs.build_type || 'release' }}"
           echo "Selected Build Type: $BUILD_CHOICE"
+
+          mkdir -p app/build/outputs/apk/output
 
           # 1. Build Debug APK (instantly installable on any Android device)
           if [ "$BUILD_CHOICE" = "debug" ] || [ "$BUILD_CHOICE" = "both" ]; then
             echo "--- Building Debug APK ---"
             ./gradlew assembleDebug --no-daemon
-            mkdir -p app/build/outputs/apk/output
             cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/output/SonicID-Debug.apk
           fi
 
@@ -91,7 +101,6 @@ jobs:
             APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
             echo "Using apksigner: $APKSIGNER"
 
-            mkdir -p app/build/outputs/apk/output
             RELEASE_DIR="app/build/outputs/apk/release"
             
             if [ -f "$RELEASE_DIR/app-release-unsigned.apk" ]; then
