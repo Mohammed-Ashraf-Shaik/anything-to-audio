@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "SonicID",
+    "slug": "sonicid-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#07090e"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ashraf.sonicid",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "SonicID needs microphone access to listen to ambient songs and detect music."
+      }
+    },
+    "android": {
+      "package": "com.ashraf.sonicid",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#07090e"
+      },
+      "permissions": [
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
