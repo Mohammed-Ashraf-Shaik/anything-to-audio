@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       build_type:
-        description: "Choose APK Build Type (release or debug)"
+        description: "Choose APK Build Type (release, debug, or both)"
         required: true
         default: "release"
         type: choice
@@ -34,8 +34,11 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
-      - name: 🤖 Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: 🤖 Accept Android SDK Licenses
+        run: |
+          echo "Using pre-installed Android SDK at $ANDROID_HOME"
+          # Accept all Android licenses non-interactively
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: 🟢 Setup Node.js (v20)
         uses: actions/setup-node@v4
@@ -62,44 +65,46 @@ jobs:
         run: |
           npx expo prebuild --platform android --clean
 
-      - name: 🔨 Build Android APK with Gradle
+      - name: 🔨 Build Standalone Android APK
         working-directory: ./mobile/android
         run: |
           chmod +x gradlew
           BUILD_CHOICE="${{ github.event.inputs.build_type || 'release' }}"
           echo "Selected Build Type: $BUILD_CHOICE"
 
+          # 1. Build Debug APK (instantly installable on any Android device)
+          if [ "$BUILD_CHOICE" = "debug" ] || [ "$BUILD_CHOICE" = "both" ]; then
+            echo "--- Building Debug APK ---"
+            ./gradlew assembleDebug --no-daemon
+            mkdir -p app/build/outputs/apk/output
+            cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/output/SonicID-Debug.apk
+          fi
+
+          # 2. Build Release APK (standalone signed with keytool for direct installation)
           if [ "$BUILD_CHOICE" = "release" ] || [ "$BUILD_CHOICE" = "both" ]; then
             echo "--- Building Release APK ---"
             ./gradlew assembleRelease --no-daemon
 
-            # Sign the release APK with a generated standalone keystore for direct installation
             KEYSTORE="standalone-release.keystore"
             keytool -genkey -v -keystore "$KEYSTORE" -alias sonicid -keyalg RSA -keysize 2048 -validity 10000 -storepass sonicid123 -keypass sonicid123 -dname "CN=SonicID, OU=Mobile, O=SonicID, C=US"
             
             APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
-            echo "Using apksigner at: $APKSIGNER"
+            echo "Using apksigner: $APKSIGNER"
 
+            mkdir -p app/build/outputs/apk/output
             RELEASE_DIR="app/build/outputs/apk/release"
+            
             if [ -f "$RELEASE_DIR/app-release-unsigned.apk" ]; then
-              $APKSIGNER sign --ks "$KEYSTORE" --ks-pass pass:sonicid123 --out "$RELEASE_DIR/SonicID-v1.0.0-Release.apk" "$RELEASE_DIR/app-release-unsigned.apk"
-              echo "Signed release APK generated: SonicID-v1.0.0-Release.apk"
+              $APKSIGNER sign --ks "$KEYSTORE" --ks-pass pass:sonicid123 --out app/build/outputs/apk/output/SonicID-Release.apk "$RELEASE_DIR/app-release-unsigned.apk"
+              echo "Signed release APK generated at output/SonicID-Release.apk"
             elif [ -f "$RELEASE_DIR/app-release.apk" ]; then
-              cp "$RELEASE_DIR/app-release.apk" "$RELEASE_DIR/SonicID-v1.0.0-Release.apk"
+              $APKSIGNER sign --ks "$KEYSTORE" --ks-pass pass:sonicid123 --out app/build/outputs/apk/output/SonicID-Release.apk "$RELEASE_DIR/app-release.apk"
             fi
-          fi
-
-          if [ "$BUILD_CHOICE" = "debug" ] || [ "$BUILD_CHOICE" = "both" ]; then
-            echo "--- Building Debug APK ---"
-            ./gradlew assembleDebug --no-daemon
-            cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/SonicID-v1.0.0-Debug.apk
           fi
 
       - name: 📤 Upload Installable APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: SonicID-Android-APK
-          path: |
-            mobile/android/app/build/outputs/apk/release/SonicID-*.apk
-            mobile/android/app/build/outputs/apk/debug/SonicID-*.apk
+          path: mobile/android/app/build/outputs/apk/output/*.apk
           retention-days: 30
