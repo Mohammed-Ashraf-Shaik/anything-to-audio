@@ -19,7 +19,7 @@ logger = logging.getLogger("SonicAM.Server")
 app = FastAPI(
     title="SonicAM - Advanced Audio & Music Recognition Engine",
     description="Detect and extract song names, artist details, album art, lyrics, and streaming links from links, videos, audio, and live microphone.",
-    version="1.0.0"
+    version="1.1.0"
 )
 
 # Enable CORS for cross-origin integration
