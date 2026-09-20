@@ -20,6 +20,7 @@ import { WebView } from 'react-native-webview';
 import { BUNDLED_HTML } from './assets/bundled_html';
 
 // Connection defaults
+const DEFAULT_CLOUD_URL = 'https://mohammed-ashraf-shaik-sonicam.hf.space';
 const DEFAULT_LAN_URL = 'http://192.168.10.36:8000';
 const DEFAULT_EMULATOR_URL = 'http://10.0.2.2:8000';
 
@@ -260,13 +261,23 @@ export default function App() {
                   <Text style={styles.presetsLabel}>Quick Presets:</Text>
                   <View style={styles.presetsRow}>
                     <TouchableOpacity
+                      style={[styles.presetChip, styles.presetChipCloud]}
+                      onPress={() => {
+                        setInputUrl(DEFAULT_CLOUD_URL);
+                        handleTestConnection(DEFAULT_CLOUD_URL);
+                      }}
+                    >
+                      <Text style={styles.presetChipCloudText}>☁️ 24/7 Cloud (HF)</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
                       style={styles.presetChip}
                       onPress={() => {
                         setInputUrl(DEFAULT_LAN_URL);
                         handleTestConnection(DEFAULT_LAN_URL);
                       }}
                     >
-                      <Text style={styles.presetChipText}>🏠 Wi-Fi LAN (PC)</Text>
+                      <Text style={styles.presetChipText}>🏠 PC LAN</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -449,8 +460,17 @@ const styles = StyleSheet.create({
   },
   presetChipText: {
     color: '#e5a950',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
+  },
+  presetChipCloud: {
+    backgroundColor: 'rgba(217, 119, 6, 0.22)',
+    borderColor: '#e5a950',
+  },
+  presetChipCloudText: {
+    color: '#fbbf24',
+    fontSize: 11,
+    fontWeight: '700',
   },
   buttonStack: {
     width: '100%',
