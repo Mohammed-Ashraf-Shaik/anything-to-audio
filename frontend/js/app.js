@@ -3,6 +3,15 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+  // API URL resolver for local web and standalone mobile app
+  function getApiUrl(endpoint) {
+    const base = window.SONICAM_BACKEND_URL || '';
+    if (base) {
+      return base.replace(/\/+$/, '') + endpoint;
+    }
+    return endpoint;
+  }
+
   // Initialize Visualizer
   const visualizer = new SonicVisualizer('visualizerCanvas');
 
@@ -177,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       advancePipelineStep(1, "Demuxing and slicing audio stream...");
       
-      const response = await fetch('/api/recognize/url', {
+      const response = await fetch(getApiUrl('/api/recognize/url'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url })
@@ -274,7 +283,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       advancePipelineStep(1, "Extracting 44.1kHz audio stream with FFmpeg...");
 
-      const response = await fetch('/api/recognize/file', {
+      const response = await fetch(getApiUrl('/api/recognize/file'), {
         method: 'POST',
         body: formData
       });
@@ -385,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       advancePipelineStep(1, "FFmpeg normalizer converting voice/sound clip...");
 
-      const response = await fetch('/api/recognize/mic', {
+      const response = await fetch(getApiUrl('/api/recognize/mic'), {
         method: 'POST',
         body: formData
       });
@@ -573,9 +582,14 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderError(errMsg) {
+    let displayMsg = errMsg;
+    if (errMsg && (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('Load failed'))) {
+      const server = window.SONICAM_BACKEND_URL || window.location.origin;
+      displayMsg = `Could not connect to SonicAM backend (${server}). Please ensure your PC server is running and accessible on the local network.`;
+    }
     renderNotFound({
       matched: false,
-      message: `Analysis failed: ${errMsg}`
+      message: `Analysis failed: ${displayMsg}`
     });
   }
 

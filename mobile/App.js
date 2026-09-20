@@ -3,57 +3,53 @@ import {
   StyleSheet,
   View,
   Text,
-  ActivityIndicator,
   BackHandler,
   Platform,
   Linking,
   ScrollView,
-  RefreshControl,
   TouchableOpacity,
   TextInput,
   Alert,
   StatusBar,
-  Image
+  Modal,
+  Image,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
+import { BUNDLED_HTML } from './assets/bundled_html';
 
-// Default connection options
+// Connection defaults
 const DEFAULT_LAN_URL = 'http://192.168.10.36:8000';
 const DEFAULT_EMULATOR_URL = 'http://10.0.2.2:8000';
 
 export default function App() {
   const webViewRef = useRef(null);
 
-  // Server URL configuration state
+  // Server configuration
   const [serverUrl, setServerUrl] = useState(DEFAULT_LAN_URL);
   const [inputUrl, setInputUrl] = useState(DEFAULT_LAN_URL);
+  const [useRemoteServer, setUseRemoteServer] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
 
-  // WebView navigation states
+  // Server health test state
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState(null); // 'success' | 'error' | null
+  const [statusMessage, setStatusMessage] = useState('');
+
+  // WebView navigation state
   const [canGoBack, setCanGoBack] = useState(false);
-  const [currentUrl, setCurrentUrl] = useState(serverUrl);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [hasError, setHasError] = useState(false);
 
-  // 1. Loading Timeout Guard: If page does not finish in 7 seconds, display config prompt
-  useEffect(() => {
-    let timer = null;
-    if (isLoading) {
-      timer = setTimeout(() => {
-        if (isLoading) {
-          setIsLoading(false);
-          setHasError(true);
-        }
-      }, 7000);
-    }
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [isLoading, serverUrl]);
+  // JavaScript to inject into the web view to configure backend URL
+  const injectedJavaScript = `
+    (function() {
+      window.SONICAM_BACKEND_URL = "${serverUrl}";
+      window.SONICAM_IS_MOBILE_APP = true;
+    })();
+    true;
+  `;
 
-  // 2. Android Hardware Back Button Navigation
+  // 1. Android Hardware Back Button Navigation
   useEffect(() => {
     if (Platform.OS !== 'android') return;
 
@@ -67,7 +63,7 @@ export default function App() {
         return true;
       }
 
-      Alert.alert('Exit SonicAM', 'Are you sure you want to close the app?', [
+      Alert.alert('Exit SonicAM', 'Are you sure you want to close SonicAM?', [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Exit', onPress: () => BackHandler.exitApp() }
       ]);
@@ -78,35 +74,65 @@ export default function App() {
     return () => backHandler.remove();
   }, [canGoBack, showConfigModal]);
 
-  // 3. Native Pull-to-Refresh
-  const onRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    setHasError(false);
-    setIsLoading(true);
-    if (webViewRef.current) {
-      webViewRef.current.reload();
-    }
-    setTimeout(() => setIsRefreshing(false), 1200);
-  }, []);
+  // 2. Test Connection to Backend
+  const handleTestConnection = async (targetUrl) => {
+    const testUrl = (targetUrl || inputUrl).trim().replace(/\/+$/, '');
+    if (!testUrl) return;
 
-  // 4. Change and Apply Server URL
-  const handleConnectUrl = (urlToConnect) => {
-    let clean = (urlToConnect || inputUrl).trim();
+    setIsTestingConnection(true);
+    setConnectionStatus(null);
+    setStatusMessage('Checking connection to ' + testUrl + '...');
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4500);
+
+      const resp = await fetch(`${testUrl}/api/health`, {
+        method: 'GET',
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (resp.ok) {
+        const data = await resp.json();
+        setConnectionStatus('success');
+        setStatusMessage(`Connected! Engine is ${data.status || 'Ready'}`);
+      } else {
+        setConnectionStatus('error');
+        setStatusMessage(`Server responded with status: ${resp.status}`);
+      }
+    } catch (err) {
+      setConnectionStatus('error');
+      setStatusMessage(`Cannot connect. Ensure server is running on ${testUrl}`);
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
+  // 3. Save & Apply Server URL
+  const handleSaveUrl = (urlToApply, remoteMode = useRemoteServer) => {
+    let clean = (urlToApply || inputUrl).trim();
     if (!clean) return;
     if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
       clean = 'http://' + clean;
     }
     setServerUrl(clean);
     setInputUrl(clean);
+    setUseRemoteServer(remoteMode);
     setShowConfigModal(false);
-    setHasError(false);
-    setIsLoading(true);
+    setConnectionStatus(null);
+
+    // Refresh WebView with new backend configuration
+    if (webViewRef.current) {
+      webViewRef.current.reload();
+    }
   };
 
-  // 5. External Link Interceptor
+  // 4. External Link Interceptor (Spotify, Apple Music, YouTube)
   const handleShouldStartLoad = (request) => {
     const { url } = request;
 
+    // Allow data/blob and local content
     if (
       url === 'about:blank' ||
       url.startsWith('data:') ||
@@ -116,14 +142,13 @@ export default function App() {
       url.startsWith('http://127.0.0.1') ||
       url.startsWith('http://192.168.') ||
       url.includes('ngrok') ||
-      url.includes('loca.lt') ||
       url.includes('vercel.app')
     ) {
       return true;
     }
 
-    // Open external links (Spotify, Apple, YouTube, Shazam) in native device apps
-    Linking.openURL(url);
+    // Open external streaming apps (Spotify, Apple, Shazam) in native OS apps
+    Linking.openURL(url).catch(() => {});
     return false;
   };
 
@@ -133,144 +158,165 @@ export default function App() {
 
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
-          {/* Main Native Full-Screen WebView */}
+          {/* Main SonicAM Interface (Loads Instantly via Bundled HTML or Remote URL) */}
           <WebView
             ref={webViewRef}
-            source={{ uri: serverUrl }}
+            source={
+              useRemoteServer
+                ? { uri: serverUrl }
+                : { html: BUNDLED_HTML, baseUrl: serverUrl }
+            }
             style={styles.webView}
+            injectedJavaScript={injectedJavaScript}
             mediaPlaybackRequiresUserAction={false}
             allowsInlineMediaPlayback={true}
             userAgent="SonicAMMobile/1.0"
             domStorageEnabled={true}
             javaScriptEnabled={true}
             androidHardwareAccelerationDisabled={false}
+            originWhitelist={['*']}
             onNavigationStateChange={(navState) => {
               setCanGoBack(navState.canGoBack);
-              setCurrentUrl(navState.url);
             }}
             onShouldStartLoadWithRequest={handleShouldStartLoad}
-            onLoadStart={() => {
-              setIsLoading(true);
-              setHasError(false);
-            }}
-            onLoadEnd={() => {
-              setIsLoading(false);
-              setHasError(false);
-            }}
-            onError={() => {
-              setIsLoading(false);
-              setHasError(true);
-            }}
           />
 
-          {/* Quick Floating Server Settings Button */}
+          {/* Discreet Floating Server Settings Button */}
           <TouchableOpacity
             style={styles.floatingSettingsBtn}
-            onPress={() => setShowConfigModal(true)}
+            onPress={() => {
+              setInputUrl(serverUrl);
+              setConnectionStatus(null);
+              setShowConfigModal(true);
+            }}
             activeOpacity={0.8}
           >
-            <Text style={styles.floatingSettingsText}>⚙️ Server</Text>
+            <View style={styles.floatingSettingsInner}>
+              <Text style={styles.floatingSettingsText}>⚙️ Server</Text>
+            </View>
           </TouchableOpacity>
 
-          {/* Loading Indicator Overlay */}
-          {isLoading && !hasError && (
-            <View style={styles.loadingOverlay}>
-              <Image
-                source={require('./assets/icon.png')}
-                style={styles.loadingIcon}
-                resizeMode="contain"
-              />
-              <ActivityIndicator size="large" color="#e5a950" style={{ marginTop: 20 }} />
-              <Text style={styles.loadingText}>Connecting to SonicAM...</Text>
-              <Text style={styles.loadingUrl}>{serverUrl}</Text>
+          {/* Server Configuration Modal */}
+          <Modal
+            visible={showConfigModal}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setShowConfigModal(false)}
+          >
+            <View style={styles.modalBackdrop}>
+              <View style={styles.modalCard}>
+                <ScrollView contentContainerStyle={styles.modalScroll}>
+                  <Image
+                    source={require('./assets/icon.png')}
+                    style={styles.modalIcon}
+                    resizeMode="contain"
+                  />
 
-              <TouchableOpacity
-                style={styles.loadingConfigBtn}
-                onPress={() => setShowConfigModal(true)}
-              >
-                <Text style={styles.loadingConfigBtnText}>Change Server Address</Text>
-              </TouchableOpacity>
+                  <Text style={styles.modalTitle}>SonicAM Server Settings</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Configure your PC backend or cloud URL for song recognition:
+                  </Text>
+
+                  {/* URL Input */}
+                  <View style={styles.inputWrapper}>
+                    <TextInput
+                      style={styles.urlInput}
+                      value={inputUrl}
+                      onChangeText={(val) => {
+                        setInputUrl(val);
+                        setConnectionStatus(null);
+                      }}
+                      placeholder="e.g. http://192.168.10.36:8000"
+                      placeholderTextColor="#8a7563"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      keyboardType="url"
+                    />
+                  </View>
+
+                  {/* Status Indicator */}
+                  {statusMessage !== '' && (
+                    <View
+                      style={[
+                        styles.statusBanner,
+                        connectionStatus === 'success'
+                          ? styles.statusSuccess
+                          : connectionStatus === 'error'
+                          ? styles.statusError
+                          : styles.statusTesting
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.statusBannerText,
+                          connectionStatus === 'success'
+                            ? styles.statusSuccessText
+                            : connectionStatus === 'error'
+                            ? styles.statusErrorText
+                            : styles.statusTestingText
+                        ]}
+                      >
+                        {statusMessage}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Presets */}
+                  <Text style={styles.presetsLabel}>Quick Presets:</Text>
+                  <View style={styles.presetsRow}>
+                    <TouchableOpacity
+                      style={styles.presetChip}
+                      onPress={() => {
+                        setInputUrl(DEFAULT_LAN_URL);
+                        handleTestConnection(DEFAULT_LAN_URL);
+                      }}
+                    >
+                      <Text style={styles.presetChipText}>🏠 Wi-Fi LAN (PC)</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.presetChip}
+                      onPress={() => {
+                        setInputUrl(DEFAULT_EMULATOR_URL);
+                        handleTestConnection(DEFAULT_EMULATOR_URL);
+                      }}
+                    >
+                      <Text style={styles.presetChipText}>💻 Emulator</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Action Buttons */}
+                  <View style={styles.buttonStack}>
+                    <TouchableOpacity
+                      style={styles.testBtn}
+                      onPress={() => handleTestConnection(inputUrl)}
+                      disabled={isTestingConnection}
+                    >
+                      {isTestingConnection ? (
+                        <ActivityIndicator size="small" color="#e5a950" />
+                      ) : (
+                        <Text style={styles.testBtnText}>⚡ Test Connection</Text>
+                      )}
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.saveBtn}
+                      onPress={() => handleSaveUrl(inputUrl, false)}
+                    >
+                      <Text style={styles.saveBtnText}>Save & Apply</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.closeBtn}
+                      onPress={() => setShowConfigModal(false)}
+                    >
+                      <Text style={styles.closeBtnText}>Close</Text>
+                    </TouchableOpacity>
+                  </View>
+                </ScrollView>
+              </View>
             </View>
-          )}
-
-          {/* Connection Error or Server Config Screen */}
-          {(hasError || showConfigModal) && (
-            <ScrollView
-              contentContainerStyle={styles.errorContainer}
-              refreshControl={
-                <RefreshControl
-                  refreshing={isRefreshing}
-                  onRefresh={onRefresh}
-                  tintColor="#e5a950"
-                  colors={['#e5a950']}
-                />
-              }
-            >
-              <Image
-                source={require('./assets/icon.png')}
-                style={styles.snowflakeIcon}
-                resizeMode="contain"
-              />
-
-              <Text style={styles.errorTitle}>
-                {showConfigModal ? 'Server Settings' : 'Connection Required'}
-              </Text>
-
-              <Text style={styles.errorDescription}>
-                {showConfigModal
-                  ? 'Connect SonicAM to your local network computer or cloud URL:'
-                  : `Cannot reach server at:\n${serverUrl}\n\nEnsure your PC server is running and enter your Wi-Fi IP or cloud URL:`}
-              </Text>
-
-              {/* Server URL Input */}
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={styles.urlInput}
-                  value={inputUrl}
-                  onChangeText={setInputUrl}
-                  placeholder="e.g. http://192.168.1.50:8000"
-                  placeholderTextColor="#8a7563"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  keyboardType="url"
-                />
-              </View>
-
-              {/* Quick Preset Buttons */}
-              <View style={styles.presetsRow}>
-                <TouchableOpacity
-                  style={styles.presetChip}
-                  onPress={() => handleConnectUrl(DEFAULT_LAN_URL)}
-                >
-                  <Text style={styles.presetChipText}>🏠 Wi-Fi LAN</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.presetChip}
-                  onPress={() => handleConnectUrl(DEFAULT_EMULATOR_URL)}
-                >
-                  <Text style={styles.presetChipText}>💻 Emulator</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Connect Button */}
-              <TouchableOpacity
-                style={styles.connectButton}
-                onPress={() => handleConnectUrl(inputUrl)}
-              >
-                <Text style={styles.connectButtonText}>Connect to SonicAM</Text>
-              </TouchableOpacity>
-
-              {showConfigModal && (
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={() => setShowConfigModal(false)}
-                >
-                  <Text style={styles.cancelButtonText}>Close Settings</Text>
-                </TouchableOpacity>
-              )}
-            </ScrollView>
-          )}
+          </Modal>
         </View>
       </SafeAreaView>
     </SafeAreaProvider>
@@ -293,147 +339,179 @@ const styles = StyleSheet.create({
   },
   floatingSettingsBtn: {
     position: 'absolute',
-    top: 10,
-    right: 12,
-    backgroundColor: 'rgba(28, 20, 15, 0.88)',
-    borderColor: 'rgba(229, 169, 80, 0.4)',
-    borderWidth: 1,
-    borderRadius: 20,
-    paddingVertical: 5,
-    paddingHorizontal: 12,
+    top: 8,
+    right: 10,
     zIndex: 50,
+  },
+  floatingSettingsInner: {
+    backgroundColor: 'rgba(28, 20, 15, 0.88)',
+    borderColor: 'rgba(229, 169, 80, 0.45)',
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
   },
   floatingSettingsText: {
     color: '#e5a950',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#0c0907',
-    alignItems: 'center',
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
-    padding: 24,
-    zIndex: 20,
+    alignItems: 'center',
+    padding: 16,
   },
-  loadingIcon: {
-    width: 90,
-    height: 90,
+  modalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#18110c',
     borderRadius: 20,
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#faf5ed',
-    letterSpacing: 0.5,
-  },
-  loadingUrl: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#8a7563',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  loadingConfigBtn: {
-    marginTop: 28,
-    paddingVertical: 8,
-    paddingHorizontal: 18,
-    borderRadius: 8,
-    borderWidth: 1,
     borderColor: 'rgba(229, 169, 80, 0.35)',
-    backgroundColor: 'rgba(28, 20, 15, 0.8)',
+    borderWidth: 1.5,
+    overflow: 'hidden',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
   },
-  loadingConfigBtnText: {
-    color: '#e5a950',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  errorContainer: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#0c0907',
+  modalScroll: {
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-    zIndex: 30,
   },
-  snowflakeIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 22,
-    marginBottom: 16,
+  modalIcon: {
+    width: 68,
+    height: 68,
+    borderRadius: 16,
+    marginBottom: 12,
   },
-  errorTitle: {
-    fontSize: 22,
+  modalTitle: {
+    fontSize: 18,
     fontWeight: '800',
     color: '#faf5ed',
-    marginBottom: 8,
+    marginBottom: 6,
+    textAlign: 'center',
   },
-  errorDescription: {
-    fontSize: 14,
+  modalSubtitle: {
+    fontSize: 13,
     color: '#c9b7a4',
     textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 20,
+    lineHeight: 18,
+    marginBottom: 16,
   },
   inputWrapper: {
     width: '100%',
-    maxWidth: 340,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   urlInput: {
     width: '100%',
-    backgroundColor: 'rgba(28, 20, 15, 0.95)',
+    backgroundColor: 'rgba(12, 9, 7, 0.95)',
     borderWidth: 1.5,
     borderColor: 'rgba(229, 169, 80, 0.45)',
     borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     color: '#faf5ed',
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
-  presetsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 18,
+  statusBanner: {
+    width: '100%',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 12,
   },
-  presetChip: {
+  statusSuccess: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+    borderWidth: 1,
+  },
+  statusError: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    borderWidth: 1,
+  },
+  statusTesting: {
     backgroundColor: 'rgba(229, 169, 80, 0.12)',
     borderColor: 'rgba(229, 169, 80, 0.3)',
     borderWidth: 1,
-    borderRadius: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 14,
+  },
+  statusBannerText: {
+    fontSize: 12,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  statusSuccessText: {
+    color: '#34d399',
+  },
+  statusErrorText: {
+    color: '#f87171',
+  },
+  statusTestingText: {
+    color: '#e5a950',
+  },
+  presetsLabel: {
+    alignSelf: 'flex-start',
+    color: '#8a7563',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  presetsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+    width: '100%',
+  },
+  presetChip: {
+    flex: 1,
+    backgroundColor: 'rgba(229, 169, 80, 0.1)',
+    borderColor: 'rgba(229, 169, 80, 0.3)',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
   },
   presetChipText: {
     color: '#e5a950',
     fontSize: 12,
     fontWeight: '600',
   },
-  connectButton: {
+  buttonStack: {
     width: '100%',
-    maxWidth: 340,
-    backgroundColor: '#e5a950',
-    paddingVertical: 14,
+    gap: 8,
+  },
+  testBtn: {
+    width: '100%',
+    backgroundColor: 'rgba(229, 169, 80, 0.15)',
+    borderColor: '#e5a950',
+    borderWidth: 1,
+    paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
-    shadowColor: '#e5a950',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 4,
-    marginBottom: 12,
   },
-  connectButtonText: {
+  testBtnText: {
+    color: '#e5a950',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  saveBtn: {
+    width: '100%',
+    backgroundColor: '#e5a950',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  saveBtnText: {
     color: '#120904',
     fontWeight: '800',
-    fontSize: 16,
+    fontSize: 15,
   },
-  cancelButton: {
+  closeBtn: {
     paddingVertical: 8,
-    paddingHorizontal: 20,
+    alignItems: 'center',
   },
-  cancelButtonText: {
+  closeBtnText: {
     color: '#8a7563',
-    fontSize: 14,
+    fontSize: 13,
   },
 });

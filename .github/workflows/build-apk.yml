@@ -17,6 +17,7 @@ on:
       - main
     paths:
       - "mobile/**"
+      - "frontend/**"
       - ".github/workflows/build-apk.yml"
 
 jobs:
@@ -65,7 +66,10 @@ jobs:
       - name: 🏗️ Prebuild Native Android Project
         working-directory: ./mobile
         run: |
+          python3 build_bundle.py || true
           npx expo prebuild --platform android --clean
+          # Ensure cleartext HTTP is explicitly permitted in native AndroidManifest.xml
+          sed -i 's/<application /<application android:usesCleartextTraffic="true" /g' android/app/src/main/AndroidManifest.xml || true
 
       - name: 🔨 Build Standalone Universal Android APK (Phones & Tablets)
         working-directory: ./mobile/android
