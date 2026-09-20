@@ -1,0 +1,11 @@
+.git
+.github
+.venv
+__pycache__
+*.pyc
+*.pyo
+temp_media
+mobile/node_modules
+mobile/android
+mobile/ios
+.DS_Store
