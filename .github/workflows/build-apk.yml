@@ -23,6 +23,8 @@ jobs:
   build-apk:
     name: Build Standalone Android APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: 📥 Checkout Repository
@@ -65,7 +67,7 @@ jobs:
         run: |
           npx expo prebuild --platform android --clean
 
-      - name: 🔨 Build Standalone Android APK
+      - name: 🔨 Build Standalone Universal Android APK (Phones & Tablets)
         working-directory: ./mobile/android
         run: |
           chmod +x gradlew
@@ -74,7 +76,7 @@ jobs:
           export NODE_PATH="$(cd .. && pwd)/node_modules"
           export PATH="$(cd .. && pwd)/node_modules/.bin:$PATH"
 
-          # Optimize Gradle properties for CI build stability
+          # Optimize Gradle properties for CI build stability & Universal Device Compatibility
           echo "newArchEnabled=false" >> gradle.properties
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> gradle.properties
 
@@ -83,21 +85,21 @@ jobs:
 
           mkdir -p app/build/outputs/apk/output
 
-          # 1. Build Debug APK (instantly installable on any Android device)
+          # 1. Build Debug APK (instantly installable on all Android phones and tablets)
           if [ "$BUILD_CHOICE" = "debug" ] || [ "$BUILD_CHOICE" = "both" ]; then
             echo "--- Building Debug APK ---"
             ./gradlew assembleDebug --stacktrace --no-daemon
             mkdir -p app/build/outputs/apk/output
-            cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/output/SonicID-Debug.apk
+            cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/output/SonicAM-Debug.apk
           fi
 
-          # 2. Build Release APK (standalone signed with keytool for direct installation)
+          # 2. Build Release APK (standalone signed with keytool for direct installation on all devices)
           if [ "$BUILD_CHOICE" = "release" ] || [ "$BUILD_CHOICE" = "both" ]; then
             echo "--- Building Release APK ---"
             ./gradlew assembleRelease --stacktrace --no-daemon
 
             KEYSTORE="standalone-release.keystore"
-            keytool -genkey -v -keystore "$KEYSTORE" -alias sonicid -keyalg RSA -keysize 2048 -validity 10000 -storepass sonicid123 -keypass sonicid123 -dname "CN=SonicID, OU=Mobile, O=SonicID, C=US"
+            keytool -genkey -v -keystore "$KEYSTORE" -alias sonicam -keyalg RSA -keysize 2048 -validity 10000 -storepass sonicam123 -keypass sonicam123 -dname "CN=SonicAM, OU=Mobile, O=SonicAM, C=US"
             
             APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
             echo "Using apksigner: $APKSIGNER"
@@ -105,16 +107,40 @@ jobs:
             RELEASE_DIR="app/build/outputs/apk/release"
             
             if [ -f "$RELEASE_DIR/app-release-unsigned.apk" ]; then
-              $APKSIGNER sign --ks "$KEYSTORE" --ks-pass pass:sonicid123 --out app/build/outputs/apk/output/SonicID-Release.apk "$RELEASE_DIR/app-release-unsigned.apk"
-              echo "Signed release APK generated at output/SonicID-Release.apk"
+              $APKSIGNER sign --ks "$KEYSTORE" --ks-pass pass:sonicam123 --out app/build/outputs/apk/output/SonicAM-Release.apk "$RELEASE_DIR/app-release-unsigned.apk"
             elif [ -f "$RELEASE_DIR/app-release.apk" ]; then
-              $APKSIGNER sign --ks "$KEYSTORE" --ks-pass pass:sonicid123 --out app/build/outputs/apk/output/SonicID-Release.apk "$RELEASE_DIR/app-release.apk"
+              $APKSIGNER sign --ks "$KEYSTORE" --ks-pass pass:sonicam123 --out app/build/outputs/apk/output/SonicAM-Release.apk "$RELEASE_DIR/app-release.apk"
             fi
+            
+            # Create standard universal filenames for 1-click direct download
+            cp app/build/outputs/apk/output/SonicAM-Release.apk app/build/outputs/apk/output/SonicAM.apk
+            cp app/build/outputs/apk/output/SonicAM-Release.apk app/build/outputs/apk/output/SonicAM-Universal.apk
+            echo "Universal APKs generated at output/SonicAM.apk & output/SonicAM-Universal.apk"
           fi
 
       - name: 📤 Upload Installable APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SonicID-Android-APK
+          name: SonicAM-Android-Universal-APK
           path: mobile/android/app/build/outputs/apk/output/*.apk
           retention-days: 30
+
+      - name: 🚀 Publish Universal APK to GitHub Releases (Direct Download)
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        with:
+          tag_name: v1.0.0
+          name: "SonicAM Universal Android Release v1.0.0 (Phones & Tablets)"
+          body: |
+            ### ☕ SonicAM - Anything to Audio & Song Recognition Engine (Universal Android APK)
+            
+            **Direct Download Standalone APK** compiled for all Android devices.
+            
+            - **Compatibility**: Android 7.0 (Nougat) through Android 15+
+            - **Form Factors**: Phones, Phablets, Foldables, and Tablets (7" to 12"+)
+            - **Architecture**: Universal (ARM64-v8a, ARMv7a, x86, x86_64)
+            - **Permissions**: Microphone (for ambient audio listening) and Internet
+          files: |
+            mobile/android/app/build/outputs/apk/output/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

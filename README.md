@@ -1,3 +1,17 @@
+# ⬇️ [DIRECT DOWNLOAD SONICAM APK (Universal for All Android Phones & Tablets)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases/latest/download/SonicAM.apk)
+
+<div align="center">
+
+[![Direct Download APK](https://img.shields.io/badge/⬇️%20DIRECT%20DOWNLOAD%20APK-SonicAM%20Universal%20(Phones%20%26%20Tablets)-e5a950?style=for-the-badge&logo=android&logoColor=black)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases/latest/download/SonicAM.apk)
+[![All Androids & Tabs](https://img.shields.io/badge/Compatibility-All%20Android%20Phones%20%26%20Tablets%20(7.0%20to%2015+)-d97706?style=for-the-badge&logo=googleplay&logoColor=white)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases)
+[![GitHub Actions CI Artifacts](https://img.shields.io/badge/📦%20GitHub%20Actions-Latest%20APK%20Build-8c4a22?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/actions/workflows/build-apk.yml)
+
+> 🚀 **Universal APK (Phones + Tablets)**: Works natively across all existing Android phones, phablets, foldables, and tablets (`Android 7.0 Nougat` to `Android 15+`). Universal CPU support (`arm64-v8a`, `armeabi-v7a`, `x86_64`) — 100% free direct installation with no Play Store account required.
+
+</div>
+
+---
+
 # ☕ SonicAM — Anything to Audio & Song Recognition Engine
 
 > **Extract, detect, and identify any song in seconds from links, video files, audio tracks, or live ambient microphone — styled in a luxurious roasted coffee, mocha & warm caramel aesthetic.**

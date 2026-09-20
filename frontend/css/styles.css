@@ -189,6 +189,32 @@ html, body {
   gap: 1rem;
 }
 
+.header-apk-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.42rem 0.95rem;
+  background: var(--gradient-btn);
+  color: #120904;
+  font-family: var(--font-heading);
+  font-size: 0.82rem;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  text-decoration: none;
+  box-shadow: 0 0 16px rgba(229, 169, 80, 0.35);
+  transition: var(--transition-smooth);
+}
+
+.header-apk-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 24px rgba(229, 169, 80, 0.55);
+}
+
+.header-apk-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
 .system-badge {
   display: flex;
   align-items: center;
