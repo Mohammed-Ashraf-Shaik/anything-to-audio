@@ -37,8 +37,19 @@ app_js = app_js.replace("fetch('/api/recognize/mic'", "fetch(getApiUrl('/api/rec
 html = html.replace('href="assets/icon.png"', f'href="{icon_data_uri}"')
 html = html.replace('src="assets/icon.png"', f'src="{icon_data_uri}"')
 
-# Inline CSS
-html = html.replace('<link rel="stylesheet" href="css/styles.css">', f'<style>\n{css}\n</style>')
+# Inline CSS and mobile-specific app overrides
+mobile_css = """
+<style>
+/* Hide the 'Get APK' download button ONLY inside the APK application */
+#btnDirectDownloadApk {
+  display: none !important;
+}
+#systemBadge {
+  cursor: pointer;
+}
+</style>
+"""
+html = html.replace('<link rel="stylesheet" href="css/styles.css">', f'<style>\n{css}\n</style>\n{mobile_css}')
 
 # Mobile helper definition before app logic
 helper_script = """
@@ -51,6 +62,21 @@ function getApiUrl(endpoint) {
     }
     return endpoint;
 }
+function triggerServerSettings() {
+    if (window.ReactNativeWebView) {
+        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_SERVER_SETTINGS' }));
+    }
+}
+document.addEventListener('DOMContentLoaded', function() {
+    var badge = document.getElementById('systemBadge');
+    if (badge) {
+        badge.addEventListener('click', triggerServerSettings);
+    }
+    var brand = document.querySelector('.brand-group');
+    if (brand) {
+        brand.addEventListener('click', triggerServerSettings);
+    }
+});
 </script>
 """
 

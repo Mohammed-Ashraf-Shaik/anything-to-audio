@@ -179,22 +179,17 @@ export default function App() {
               setCanGoBack(navState.canGoBack);
             }}
             onShouldStartLoadWithRequest={handleShouldStartLoad}
-          />
-
-          {/* Discreet Floating Server Settings Button */}
-          <TouchableOpacity
-            style={styles.floatingSettingsBtn}
-            onPress={() => {
-              setInputUrl(serverUrl);
-              setConnectionStatus(null);
-              setShowConfigModal(true);
+            onMessage={(event) => {
+              try {
+                const data = JSON.parse(event.nativeEvent.data);
+                if (data.type === 'OPEN_SERVER_SETTINGS') {
+                  setInputUrl(serverUrl);
+                  setConnectionStatus(null);
+                  setShowConfigModal(true);
+                }
+              } catch (e) {}
             }}
-            activeOpacity={0.8}
-          >
-            <View style={styles.floatingSettingsInner}>
-              <Text style={styles.floatingSettingsText}>⚙️ Server</Text>
-            </View>
-          </TouchableOpacity>
+          />
 
           {/* Server Configuration Modal */}
           <Modal
@@ -336,25 +331,6 @@ const styles = StyleSheet.create({
   webView: {
     flex: 1,
     backgroundColor: '#0c0907',
-  },
-  floatingSettingsBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 10,
-    zIndex: 50,
-  },
-  floatingSettingsInner: {
-    backgroundColor: 'rgba(28, 20, 15, 0.88)',
-    borderColor: 'rgba(229, 169, 80, 0.45)',
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-  },
-  floatingSettingsText: {
-    color: '#e5a950',
-    fontSize: 11,
-    fontWeight: '700',
   },
   modalBackdrop: {
     flex: 1,
