@@ -27,9 +27,9 @@ const DEFAULT_EMULATOR_URL = 'http://10.0.2.2:8000';
 export default function App() {
   const webViewRef = useRef(null);
 
-  // Server configuration
-  const [serverUrl, setServerUrl] = useState(DEFAULT_LAN_URL);
-  const [inputUrl, setInputUrl] = useState(DEFAULT_LAN_URL);
+  // Server configuration - Defaults to 24/7 Global Cloud Server
+  const [serverUrl, setServerUrl] = useState(DEFAULT_CLOUD_URL);
+  const [inputUrl, setInputUrl] = useState(DEFAULT_CLOUD_URL);
   const [useRemoteServer, setUseRemoteServer] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
 

@@ -55,8 +55,9 @@ html = html.replace('<link rel="stylesheet" href="css/styles.css">', f'<style>\n
 helper_script = """
 <script>
 window.SONICAM_IS_MOBILE_APP = true;
+window.SONICAM_BACKEND_URL = window.SONICAM_BACKEND_URL || 'https://mohammed-ashraf-shaik-sonicam.hf.space';
 function getApiUrl(endpoint) {
-    var base = window.SONICAM_BACKEND_URL || '';
+    var base = window.SONICAM_BACKEND_URL || 'https://mohammed-ashraf-shaik-sonicam.hf.space';
     if (base) {
         return base.replace(/\\/+$/, '') + endpoint;
     }
