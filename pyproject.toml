@@ -1,0 +1,18 @@
+[project]
+name = "anything-to-audio"
+version = "1.0.0"
+description = "SonicID - Audio & Music Recognition Engine"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "shazamio>=0.8.0",
+    "yt-dlp>=2024.8.0",
+    "imageio-ffmpeg>=0.5.0",
+    "python-multipart>=0.0.9",
+    "requests>=2.32.0",
+    "aiofiles>=23.0.0"
+]
+
+[tool.vercel]
+entrypoint = "backend.main:app"

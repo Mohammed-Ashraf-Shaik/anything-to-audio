@@ -14,8 +14,18 @@ logger = logging.getLogger("SonicID.Config")
 # Base directories
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
-TEMP_DIR = BASE_DIR / "temp_media"
-TEMP_DIR.mkdir(parents=True, exist_ok=True)
+
+# Use writable /tmp directory on Vercel / serverless platforms
+import tempfile
+if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+    TEMP_DIR = Path(tempfile.gettempdir()) / "sonic_temp"
+else:
+    TEMP_DIR = BASE_DIR / "temp_media"
+
+try:
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
+except Exception:
+    TEMP_DIR = Path(tempfile.gettempdir())
 
 # Discover & configure FFmpeg executable
 FFMPEG_PATH = None
@@ -30,11 +40,12 @@ else:
         import imageio_ffmpeg
         img_ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
         if os.path.exists(img_ffmpeg):
-            try:
-                shutil.copy2(img_ffmpeg, str(venv_ffmpeg))
-                FFMPEG_PATH = str(venv_ffmpeg)
-            except Exception:
-                FFMPEG_PATH = img_ffmpeg
+            if os.name != "nt":
+                try:
+                    os.chmod(img_ffmpeg, 0o755)
+                except Exception:
+                    pass
+            FFMPEG_PATH = img_ffmpeg
     except Exception as e:
         logger.warning(f"imageio_ffmpeg failed: {e}")
 
