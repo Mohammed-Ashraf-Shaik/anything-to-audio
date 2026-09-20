@@ -3,9 +3,12 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // API URL resolver for local web and standalone mobile app
+  // API URL resolver for local web, file:// protocol, and standalone mobile app
   function getApiUrl(endpoint) {
-    const base = window.SONICAM_BACKEND_URL || '';
+    let base = window.SONICAM_BACKEND_URL || '';
+    if (!base && (window.location.protocol === 'file:' || !window.location.origin || window.location.origin === 'null')) {
+      base = 'http://localhost:8000';
+    }
     if (base) {
       return base.replace(/\/+$/, '') + endpoint;
     }
@@ -177,8 +180,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   urlForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const url = urlInput.value.trim();
-    if (!url) return;
+    const raw = urlInput.value.trim();
+    if (!raw) return;
+
+    // Sanitize and extract pure URL if pasted with prefixes like '1) https://...', quotes, or markdown
+    const match = raw.match(/https?:\/\/[^\s<>"')\]]+/i);
+    const url = match ? match[0].replace(/[.,;:]+$/, '') : raw;
+    urlInput.value = url;
 
     startPipeline("Connecting to media stream...");
     advancePipelineStep(0);
@@ -584,8 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderError(errMsg) {
     let displayMsg = errMsg;
     if (errMsg && (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('Load failed'))) {
-      const server = window.SONICAM_BACKEND_URL || window.location.origin;
-      displayMsg = `Could not connect to SonicAM backend (${server}). Please ensure your PC server is running and accessible on the local network.`;
+      displayMsg = `Unable to reach SonicAM Cloud recognition engine. Please check your internet connection and try again.`;
     }
     renderNotFound({
       matched: false,

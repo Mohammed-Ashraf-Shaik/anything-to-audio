@@ -44,18 +44,15 @@ mobile_css = """
 #btnDirectDownloadApk {
   display: none !important;
 }
-#systemBadge {
-  cursor: pointer;
-}
 </style>
 """
 html = html.replace('<link rel="stylesheet" href="css/styles.css">', f'<style>\n{css}\n</style>\n{mobile_css}')
 
-# Mobile helper definition before app logic
+# Mobile helper definition before app logic - Exclusively routes to 24/7 Cloud Server
 helper_script = """
 <script>
 window.SONICAM_IS_MOBILE_APP = true;
-window.SONICAM_BACKEND_URL = window.SONICAM_BACKEND_URL || 'https://mohammed-ashraf-shaik-sonicam.hf.space';
+window.SONICAM_BACKEND_URL = 'https://mohammed-ashraf-shaik-sonicam.hf.space';
 function getApiUrl(endpoint) {
     var base = window.SONICAM_BACKEND_URL || 'https://mohammed-ashraf-shaik-sonicam.hf.space';
     if (base) {
@@ -63,21 +60,6 @@ function getApiUrl(endpoint) {
     }
     return endpoint;
 }
-function triggerServerSettings() {
-    if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'OPEN_SERVER_SETTINGS' }));
-    }
-}
-document.addEventListener('DOMContentLoaded', function() {
-    var badge = document.getElementById('systemBadge');
-    if (badge) {
-        badge.addEventListener('click', triggerServerSettings);
-    }
-    var brand = document.querySelector('.brand-group');
-    if (brand) {
-        brand.addEventListener('click', triggerServerSettings);
-    }
-});
 </script>
 """
 

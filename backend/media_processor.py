@@ -4,6 +4,7 @@ import uuid
 import asyncio
 import subprocess
 import logging
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 
@@ -87,6 +88,10 @@ class MediaProcessor:
         Extract an audio snippet from any web URL (YouTube, TikTok, Reels, SoundCloud, etc.)
         using yt-dlp + FFmpeg. Also extracts source metadata (title, author, tags).
         """
+        # Sanitize and extract pure URL from potential prefixes (e.g. "1) https://...", markdown, quotes)
+        clean_match = re.search(r'https?://[^\s<>"\')\]]+', url)
+        clean_url = clean_match.group(0).rstrip('.,;:') if clean_match else url.strip()
+
         output_base = cls.generate_temp_path("snippet")
         # Template for yt-dlp
         outtmpl = str(output_base.parent / f"{output_base.stem}.%(ext)s")
@@ -96,6 +101,8 @@ class MediaProcessor:
             'outtmpl': outtmpl,
             'ffmpeg_location': FFMPEG_PATH,
             'download_ranges': yt_dlp.utils.download_range_func(None, [(0, duration)]),
+            'playlist_items': '1',       # Download only 1st item for multi-clip posts (Instagram carousels)
+            'noplaylist': True,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'wav',
@@ -106,22 +113,34 @@ class MediaProcessor:
             ],
             'quiet': True,
             'no_warnings': True,
-            'noplaylist': True,
             'socket_timeout': 15,
-            'retries': 2,
+            'retries': 3,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept-Language': 'en-US,en;q=0.9',
+            }
         }
 
         extracted_info = {}
         
         def _download():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                return info
+                try:
+                    info = ydl.extract_info(clean_url, download=True)
+                    return info
+                except yt_dlp.utils.MaxDownloadsReached:
+                    return None
 
         loop = asyncio.get_running_loop()
         try:
             info = await loop.run_in_executor(None, _download)
             if info:
+                # Handle playlist/carousel root object
+                if "entries" in info and info["entries"]:
+                    valid_entries = [e for e in info["entries"] if e]
+                    if valid_entries:
+                        info = valid_entries[0]
+
                 extracted_info = {
                     "source_title": info.get("title"),
                     "source_uploader": info.get("uploader") or info.get("channel"),
@@ -130,21 +149,31 @@ class MediaProcessor:
                     "source_album": info.get("album"),
                     "source_duration": info.get("duration"),
                     "source_thumbnail": info.get("thumbnail"),
-                    "webpage_url": info.get("webpage_url", url),
+                    "webpage_url": info.get("webpage_url", clean_url),
                 }
         except Exception as e:
             logger.error(f"yt-dlp download failed: {e}")
             raise RuntimeError(f"Could not extract audio from URL: {str(e)}")
 
         expected_wav = output_base.parent / f"{output_base.stem}.wav"
-        if not expected_wav.exists():
-            # Check for other extensions
-            matches = list(output_base.parent.glob(f"{output_base.stem}.*"))
-            if matches:
-                # Convert matched file to wav
-                converted_wav = await cls.extract_audio_from_file(matches[0], 0, duration)
-                cls.cleanup_file(matches[0])
-                return converted_wav, extracted_info
-            raise RuntimeError("Audio download completed but output file was not found.")
+        if expected_wav.exists() and expected_wav.stat().st_size > 0:
+            return expected_wav, extracted_info
+
+        # Check for any files starting with the stem
+        all_matches = [p for p in output_base.parent.glob(f"{output_base.stem}*") if p.is_file() and p.stat().st_size > 0]
+        wav_matches = [p for p in all_matches if p.suffix.lower() == ".wav"]
+        if wav_matches:
+            return wav_matches[0], extracted_info
+
+        if all_matches:
+            # Convert matched media file to wav
+            best_candidate = sorted(all_matches, key=lambda p: p.stat().st_size, reverse=True)[0]
+            converted_wav = await cls.extract_audio_from_file(best_candidate, 0, duration)
+            for f in all_matches:
+                if f != converted_wav:
+                    cls.cleanup_file(f)
+            return converted_wav, extracted_info
+
+        raise RuntimeError("Audio download completed but output file was not found.")
 
         return expected_wav, extracted_info

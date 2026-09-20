@@ -21,4 +21,12 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         if: env.HF_TOKEN != ''
         run: |
-          git push --force https://Mohammed-Ashraf-Shaik:$HF_TOKEN@huggingface.co/spaces/Mohammed-Ashraf-Shaik/SONICAM main:main
+          git checkout -b hf-deploy
+          # Prepend Hugging Face Space Docker metadata so HF automatically builds Docker on port 8000
+          printf -- "---\ntitle: SonicAM\nemoji: ☕\ncolorFrom: yellow\ncolorTo: brown\nsdk: docker\napp_port: 8000\n---\n\n" > /tmp/hf_meta.md
+          cat README.md >> /tmp/hf_meta.md
+          mv /tmp/hf_meta.md README.md
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(hf): configure Hugging Face Spaces Docker runtime"
+          git push --force https://Mohammed-Ashraf-Shaik:$HF_TOKEN@huggingface.co/spaces/Mohammed-Ashraf-Shaik/SONICAM hf-deploy:main
