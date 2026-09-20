@@ -1,3 +1,12 @@
+---
+title: SonicAM
+emoji: ☕
+colorFrom: yellow
+colorTo: brown
+sdk: docker
+app_port: 8000
+---
+
 # ⬇️ [DIRECT DOWNLOAD SONICAM APK (Universal for All Android Phones & Tablets)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases/latest/download/SonicAM.apk)
 
 <div align="center">
