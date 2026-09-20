@@ -13,7 +13,8 @@
   
   <!-- Application Styles -->
   <link rel="stylesheet" href="css/styles.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☕</text></svg>">
+  <link rel="icon" type="image/png" href="assets/icon.png">
+  <link rel="apple-touch-icon" href="assets/icon.png">
 </head>
 <body>
   <!-- Ambient Cosmic Background Lights -->
@@ -26,9 +27,7 @@
     <div class="header-container">
       <div class="brand-group">
         <div class="brand-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2v20M17 5v14M7 5v14M2 10v4M22 10v4"/>
-          </svg>
+          <img src="assets/icon.png" alt="SonicAM Snowflake" class="brand-logo-img">
         </div>
         <div class="brand-text">
           <span class="brand-title">SONIC<span class="brand-accent">AM</span></span>
@@ -42,7 +41,8 @@
             <polyline points="7 10 12 15 17 10"/>
             <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          <span>Direct Download APK</span>
+          <span class="apk-btn-full">Direct Download APK</span>
+          <span class="apk-btn-compact">Get APK</span>
         </a>
 
         <div class="system-badge" id="systemBadge">
@@ -88,14 +88,16 @@
             <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
             <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
           </svg>
-          <span>Web Link / Social</span>
+          <span class="tab-label-full">Web Link / Social</span>
+          <span class="tab-label-short">Link</span>
         </button>
 
         <button class="tab-btn" id="tabFileBtn" role="tab" aria-selected="false" data-target="tabFile">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
           </svg>
-          <span>Upload File (Video / Audio)</span>
+          <span class="tab-label-full">Upload File (Video / Audio)</span>
+          <span class="tab-label-short">File</span>
         </button>
 
         <button class="tab-btn" id="tabMicBtn" role="tab" aria-selected="false" data-target="tabMic">
@@ -103,7 +105,8 @@
             <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
             <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/>
           </svg>
-          <span>Live Ambient Mic</span>
+          <span class="tab-label-full">Live Ambient Mic</span>
+          <span class="tab-label-short">Mic</span>
         </button>
       </div>
 
