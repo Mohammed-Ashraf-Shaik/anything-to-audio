@@ -86,14 +86,15 @@ jobs:
           # 1. Build Debug APK (instantly installable on any Android device)
           if [ "$BUILD_CHOICE" = "debug" ] || [ "$BUILD_CHOICE" = "both" ]; then
             echo "--- Building Debug APK ---"
-            ./gradlew assembleDebug --no-daemon
+            ./gradlew assembleDebug --stacktrace --no-daemon
+            mkdir -p app/build/outputs/apk/output
             cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/output/SonicID-Debug.apk
           fi
 
           # 2. Build Release APK (standalone signed with keytool for direct installation)
           if [ "$BUILD_CHOICE" = "release" ] || [ "$BUILD_CHOICE" = "both" ]; then
             echo "--- Building Release APK ---"
-            ./gradlew assembleRelease --no-daemon
+            ./gradlew assembleRelease --stacktrace --no-daemon
 
             KEYSTORE="standalone-release.keystore"
             keytool -genkey -v -keystore "$KEYSTORE" -alias sonicid -keyalg RSA -keysize 2048 -validity 10000 -storepass sonicid123 -keypass sonicid123 -dname "CN=SonicID, OU=Mobile, O=SonicID, C=US"
