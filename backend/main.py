@@ -14,10 +14,10 @@ from backend.config import FRONTEND_DIR, TEMP_DIR, MAX_FILE_SIZE_BYTES, ALLOWED_
 from backend.media_processor import MediaProcessor
 from backend.recognizer import SongRecognizer
 
-logger = logging.getLogger("SonicID.Server")
+logger = logging.getLogger("SonicAM.Server")
 
 app = FastAPI(
-    title="SonicID - Advanced Audio & Music Recognition Engine",
+    title="SonicAM - Advanced Audio & Music Recognition Engine",
     description="Detect and extract song names, artist details, album art, lyrics, and streaming links from links, videos, audio, and live microphone.",
     version="1.0.0"
 )
@@ -41,7 +41,7 @@ async def health_check():
     """System health check and diagnostic endpoint."""
     return {
         "status": "healthy",
-        "service": "SonicID Recognition Engine",
+        "service": "SonicAM Recognition Engine",
         "ffmpeg_configured": FFMPEG_PATH is not None,
         "ffmpeg_path": FFMPEG_PATH,
         "temp_directory": str(TEMP_DIR),

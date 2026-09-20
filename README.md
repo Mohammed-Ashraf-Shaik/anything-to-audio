@@ -1,4 +1,4 @@
-# 🎵 SonicID — Anything to Audio & Song Recognition Engine
+# 🎵 SonicAM — Anything to Audio & Song Recognition Engine
 
 > **Extract, detect, and identify any song in seconds from links, video files, audio tracks, or live ambient microphone.**
 
@@ -12,9 +12,9 @@
 
 ## 🌟 Overview
 
-**SonicID** is an advanced, full-stack music identification platform engineered to solve real-world song recognition problems without relying on paid APIs or restrictive quotas.
+**SonicAM** is an advanced, full-stack music identification platform engineered to solve real-world song recognition problems without relying on paid APIs or restrictive quotas.
 
-Whether you have a **TikTok clip, YouTube Short, Instagram Reel, recorded video file, background audio track, or live music playing around you**, SonicID extracts the audio, computes neural acoustic landmarks, and matches it against a global database of over 100+ million commercial songs.
+Whether you have a **TikTok clip, YouTube Short, Instagram Reel, recorded video file, background audio track, or live music playing around you**, SonicAM extracts the audio, computes neural acoustic landmarks, and matches it against a global database of over 100+ million commercial songs.
 
 ---
 

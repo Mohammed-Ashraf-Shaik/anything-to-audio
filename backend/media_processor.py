@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional, Tuple
 import yt_dlp
 from backend.config import FFMPEG_PATH, TEMP_DIR
 
-logger = logging.getLogger("SonicID.MediaProcessor")
+logger = logging.getLogger("SonicAM.MediaProcessor")
 
 class MediaProcessor:
     @staticmethod

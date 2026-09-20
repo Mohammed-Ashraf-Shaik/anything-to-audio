@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "SonicID",
-    "slug": "sonicid-mobile",
+    "name": "SonicAM",
+    "slug": "sonicam-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -9,21 +9,21 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#07090e"
+      "backgroundColor": "#0c0907"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ashraf.sonicid",
+      "bundleIdentifier": "com.ashraf.sonicam",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "SonicID needs microphone access to listen to ambient songs and detect music."
+        "NSMicrophoneUsageDescription": "SonicAM needs microphone access to listen to ambient songs and detect music."
       }
     },
     "android": {
-      "package": "com.ashraf.sonicid",
+      "package": "com.ashraf.sonicam",
       "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#07090e"
+        "backgroundColor": "#0c0907"
       },
       "permissions": [
         "RECORD_AUDIO",

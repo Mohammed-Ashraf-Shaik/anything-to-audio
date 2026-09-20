@@ -9,7 +9,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 )
-logger = logging.getLogger("SonicID.Config")
+logger = logging.getLogger("SonicAM.Config")
 
 # Base directories
 BASE_DIR = Path(__file__).resolve().parent.parent

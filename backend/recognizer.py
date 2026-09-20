@@ -17,7 +17,7 @@ except ImportError:
 
 from shazamio import Shazam
 
-logger = logging.getLogger("SonicID.Recognizer")
+logger = logging.getLogger("SonicAM.Recognizer")
 
 class SongRecognizer:
     def __init__(self):

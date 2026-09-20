@@ -1,5 +1,5 @@
 /**
- * SonicID Application Logic & API Orchestration
+ * SonicAM Application Logic & API Orchestration
  */
 
 document.addEventListener('DOMContentLoaded', () => {

@@ -1,5 +1,5 @@
 /**
- * SonicID Audio Visualizer Engine
+ * SonicAM Audio Visualizer Engine
  * Web Audio API Oscilloscope & Frequency Spectrum Bars
  */
 
@@ -101,7 +101,7 @@ class SonicVisualizer {
         case 'playback':
         case 'playback-sim':
           statusLabel.textContent = 'PREVIEW AUDIO SPECTRUM';
-          statusLabel.style.color = '#34d399';
+          statusLabel.style.color = '#f59e0b';
           break;
         default:
           statusLabel.textContent = 'IDLE SPECTRUM';
@@ -150,13 +150,13 @@ class SonicVisualizer {
       
       const grad = ctx.createLinearGradient(0, 0, displayWidth, 0);
       if (w === 0) {
-        grad.addColorStop(0, 'rgba(0, 242, 254, 0.1)');
-        grad.addColorStop(0.5, 'rgba(79, 172, 254, 0.6)');
-        grad.addColorStop(1, 'rgba(138, 43, 226, 0.2)');
+        grad.addColorStop(0, 'rgba(229, 169, 80, 0.15)');
+        grad.addColorStop(0.5, 'rgba(245, 158, 11, 0.7)');
+        grad.addColorStop(1, 'rgba(140, 74, 34, 0.25)');
       } else {
-        grad.addColorStop(0, 'rgba(138, 43, 226, 0.1)');
-        grad.addColorStop(0.5, 'rgba(255, 0, 128, 0.4)');
-        grad.addColorStop(1, 'rgba(0, 242, 254, 0.2)');
+        grad.addColorStop(0, 'rgba(140, 74, 34, 0.15)');
+        grad.addColorStop(0.5, 'rgba(194, 65, 12, 0.5)');
+        grad.addColorStop(1, 'rgba(229, 169, 80, 0.25)');
       }
       ctx.strokeStyle = grad;
 
@@ -187,13 +187,13 @@ class SonicVisualizer {
 
       const grad = ctx.createLinearGradient(0, y, 0, displayHeight);
       if (isPlayback) {
-        grad.addColorStop(0, '#34d399');
-        grad.addColorStop(0.5, '#00f2fe');
-        grad.addColorStop(1, 'rgba(0, 242, 254, 0.2)');
+        grad.addColorStop(0, '#f59e0b');
+        grad.addColorStop(0.5, '#e5a950');
+        grad.addColorStop(1, 'rgba(140, 74, 34, 0.25)');
       } else {
-        grad.addColorStop(0, '#00f2fe');
-        grad.addColorStop(0.5, '#4facfe');
-        grad.addColorStop(1, 'rgba(138, 43, 226, 0.2)');
+        grad.addColorStop(0, '#e5a950');
+        grad.addColorStop(0.5, '#c87a3e');
+        grad.addColorStop(1, 'rgba(120, 53, 15, 0.25)');
       }
 
       ctx.fillStyle = grad;
@@ -203,7 +203,7 @@ class SonicVisualizer {
 
       // Top glowing dot
       if (percent > 0.4) {
-        ctx.fillStyle = isPlayback ? '#a7f3d0' : '#ffffff';
+        ctx.fillStyle = isPlayback ? '#fef3c7' : '#faf5ed';
         ctx.beginPath();
         ctx.arc(x + barWidth / 2, y - 2, 1.5, 0, Math.PI * 2);
         ctx.fill();
@@ -226,8 +226,9 @@ class SonicVisualizer {
       const y = displayHeight - barHeight;
 
       const grad = ctx.createLinearGradient(0, y, 0, displayHeight);
-      grad.addColorStop(0, '#34d399');
-      grad.addColorStop(1, 'rgba(0, 242, 254, 0.2)');
+      grad.addColorStop(0, '#f59e0b');
+      grad.addColorStop(0.5, '#e5a950');
+      grad.addColorStop(1, 'rgba(140, 74, 34, 0.2)');
 
       ctx.fillStyle = grad;
       ctx.beginPath();

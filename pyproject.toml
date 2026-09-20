@@ -1,7 +1,7 @@
 [project]
 name = "anything-to-audio"
 version = "1.0.0"
-description = "SonicID - Audio & Music Recognition Engine"
+description = "SonicAM - Audio & Music Recognition Engine"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.115.0",

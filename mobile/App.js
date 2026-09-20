@@ -46,7 +46,7 @@ export default function App() {
       }
 
       // Prompt to exit when at root page
-      Alert.alert('Exit SonicID', 'Are you sure you want to close the app?', [
+      Alert.alert('Exit SonicAM', 'Are you sure you want to close the app?', [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Exit', onPress: () => BackHandler.exitApp() }
       ]);
@@ -70,51 +70,35 @@ export default function App() {
   }, []);
 
   // ==========================================
-  // 3. External Links & Protocol Interceptor
+  // 3. External Link Detection & Handling
   // ==========================================
   const handleShouldStartLoad = (request) => {
     const { url } = request;
 
-    // Allow normal app navigation
+    // Allow blank URLs, data URIs, or local dev server URLs
     if (
-      url.startsWith(TARGET_URL) ||
+      url === 'about:blank' ||
+      url.startsWith('data:') ||
+      url.startsWith('blob:') ||
+      url.startsWith('http://10.0.2.2') ||
       url.startsWith('http://localhost') ||
       url.startsWith('http://127.0.0.1') ||
-      url.startsWith('about:blank')
+      url.includes('ngrok') ||
+      url.includes('loca.lt') ||
+      url.includes('vercel.app')
     ) {
       return true;
     }
 
-    // Open external apps for Spotify, Apple Music, YouTube, phone, email
-    const isExternalProtocol =
-      url.startsWith('tel:') ||
-      url.startsWith('mailto:') ||
-      url.startsWith('sms:') ||
-      url.includes('spotify.com') ||
-      url.includes('apple.com') ||
-      url.includes('youtube.com') ||
-      url.includes('shazam.com');
-
-    if (isExternalProtocol) {
-      Linking.canOpenURL(url).then((supported) => {
-        if (supported) {
-          Linking.openURL(url);
-        } else {
-          Alert.alert('Cannot Open Link', `No compatible app found for: ${url}`);
-        }
-      });
-      return false; // Prevent navigation inside WebView
-    }
-
-    // Default: Open other external web domains in device browser
+    // External social or streaming URLs: open in device default browser / apps
     Linking.openURL(url);
     return false;
   };
 
   return (
     <SafeAreaProvider>
-      {/* Dark Theme Status Bar matching SonicID */}
-      <StatusBar barStyle="light-content" backgroundColor="#07090e" />
+      {/* Dark Theme Status Bar matching SonicAM */}
+      <StatusBar barStyle="light-content" backgroundColor="#0c0907" />
 
       {/* Safe Area View prevents notch & home indicator overlap */}
       <SafeAreaView style={styles.safeArea}>
@@ -127,7 +111,7 @@ export default function App() {
             // Permissions & Audio Capabilities
             mediaPlaybackRequiresUserAction={false}
             allowsInlineMediaPlayback={true}
-            userAgent="SonicIDMobile/1.0"
+            userAgent="SonicAMMobile/1.0"
             // Cache & Hardware Acceleration
             domStorageEnabled={true}
             javaScriptEnabled={true}
@@ -151,8 +135,8 @@ export default function App() {
           {/* Loading Indicator Overlay */}
           {isLoading && (
             <View style={styles.loadingOverlay}>
-              <ActivityIndicator size="large" color="#00f2fe" />
-              <Text style={styles.loadingText}>Loading SonicID...</Text>
+              <ActivityIndicator size="large" color="#e5a950" />
+              <Text style={styles.loadingText}>Loading SonicAM...</Text>
             </View>
           )}
 
@@ -164,15 +148,15 @@ export default function App() {
                 <RefreshControl
                   refreshing={isRefreshing}
                   onRefresh={onRefresh}
-                  tintColor="#00f2fe"
-                  colors={['#00f2fe']}
+                  tintColor="#e5a950"
+                  colors={['#e5a950']}
                 />
               }
             >
               <Text style={styles.errorIcon}>📡</Text>
               <Text style={styles.errorTitle}>Connection Failed</Text>
               <Text style={styles.errorDescription}>
-                Could not connect to the SonicID server. Ensure the server is online and your mobile device is connected.
+                Could not connect to the SonicAM server. Ensure the server is online and your mobile device is connected.
               </Text>
               <TouchableOpacity style={styles.retryButton} onPress={onRefresh}>
                 <Text style={styles.retryButtonText}>Tap to Retry</Text>
@@ -188,20 +172,20 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#07090e',
+    backgroundColor: '#0c0907',
   },
   container: {
     flex: 1,
-    backgroundColor: '#07090e',
+    backgroundColor: '#0c0907',
     position: 'relative',
   },
   webView: {
     flex: 1,
-    backgroundColor: '#07090e',
+    backgroundColor: '#0c0907',
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#07090e',
+    backgroundColor: '#0c0907',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10,
@@ -209,13 +193,13 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 14,
     fontSize: 14,
-    color: '#94a3b8',
+    color: '#c9b7a4',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     letterSpacing: 1,
   },
   errorContainer: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#07090e',
+    backgroundColor: '#0c0907',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
@@ -233,23 +217,23 @@ const styles = StyleSheet.create({
   },
   errorDescription: {
     fontSize: 14,
-    color: '#94a3b8',
+    color: '#c9b7a4',
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 24,
   },
   retryButton: {
-    backgroundColor: '#00f2fe',
+    backgroundColor: '#e5a950',
     paddingVertical: 12,
     paddingHorizontal: 28,
     borderRadius: 8,
-    shadowColor: '#00f2fe',
+    shadowColor: '#e5a950',
     shadowOpacity: 0.4,
     shadowRadius: 10,
     elevation: 5,
   },
   retryButtonText: {
-    color: '#07090e',
+    color: '#120904',
     fontWeight: 'bold',
     fontSize: 16,
   },
