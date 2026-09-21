@@ -130,6 +130,9 @@ async def recognize_file(file: UploadFile = File(...)):
 
     except HTTPException:
         raise
+    except ValueError as e:
+        logger.warning(f"Validation issue processing file {file.filename}: {e}")
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error(f"Error processing uploaded file {file.filename}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

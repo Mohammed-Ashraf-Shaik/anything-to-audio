@@ -363,6 +363,48 @@ html, body {
   line-height: 1.65;
 }
 
+.hero-apk-badge-wrapper {
+  margin: -0.75rem auto 1.75rem;
+  display: flex;
+  justify-content: center;
+}
+
+.hero-apk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 1.25rem;
+  background: rgba(229, 169, 80, 0.12);
+  border: 1px solid rgba(229, 169, 80, 0.4);
+  border-radius: var(--radius-pill);
+  color: #fff;
+  font-size: 0.88rem;
+  text-decoration: none;
+  transition: var(--transition-smooth);
+  box-shadow: 0 0 20px rgba(229, 169, 80, 0.15);
+}
+
+.hero-apk-badge:hover {
+  background: rgba(229, 169, 80, 0.22);
+  border-color: rgba(229, 169, 80, 0.7);
+  transform: translateY(-2px);
+  box-shadow: 0 0 30px rgba(229, 169, 80, 0.35);
+}
+
+.hero-apk-badge strong {
+  color: var(--neon-cyan);
+}
+
+.hero-apk-badge .badge-arrow {
+  color: var(--accent-orange);
+  font-weight: 700;
+  transition: transform 0.2s ease;
+}
+
+.hero-apk-badge:hover .badge-arrow {
+  transform: translateX(4px);
+}
+
 /* Visualizer Canvas */
 .visualizer-wrapper {
   position: relative;

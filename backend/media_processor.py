@@ -42,12 +42,15 @@ class MediaProcessor:
         Works with MP4, MKV, MOV, WEBM, MP3, M4A, FLAC, OGG, etc.
         """
         output_wav = cls.generate_temp_path("wav")
+        ffmpeg_bin = FFMPEG_PATH or "ffmpeg"
         
-        ffmpeg_cmd = [
-            FFMPEG_PATH or "ffmpeg",
+        # Primary attempt: fast seek with primary audio stream map
+        cmd1 = [
+            ffmpeg_bin,
             "-y",
             "-ss", str(start_time),
             "-i", str(input_path),
+            "-map", "0:a:0?",
             "-t", str(duration),
             "-vn",                       # strip video stream
             "-acodec", "pcm_s16le",       # uncompressed PCM 16-bit
@@ -56,25 +59,54 @@ class MediaProcessor:
             str(output_wav)
         ]
         
-        logger.info(f"Extracting audio using FFmpeg: {' '.join(ffmpeg_cmd)}")
-        
-        # Run FFmpeg asynchronously
+        logger.info(f"Extracting audio using FFmpeg: {' '.join(cmd1)}")
         process = await asyncio.create_subprocess_exec(
-            *ffmpeg_cmd,
+            *cmd1,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await process.communicate()
+        err_msg = stderr.decode(errors="replace")
+
+        # Detect silent videos with no audio stream
+        if process.returncode != 0 and any(s in err_msg.lower() for s in ["does not contain any stream", "matches no streams", "no audio stream", "output file #0 does not contain any stream"]):
+            cls.cleanup_file(output_wav)
+            raise ValueError("This video file does not contain an audio track. Please upload a video with sound.")
+        
+        # Fallback attempt: output seek without -map if fast seek failed
+        if process.returncode != 0 or not output_wav.exists() or output_wav.stat().st_size == 0:
+            logger.warning(f"Fast seek extraction failed (code {process.returncode}), attempting output seek fallback...")
+            cls.cleanup_file(output_wav)
+            cmd2 = [
+                ffmpeg_bin,
+                "-y",
+                "-i", str(input_path),
+                "-ss", str(start_time),
+                "-t", str(duration),
+                "-vn",
+                "-acodec", "pcm_s16le",
+                "-ar", "44100",
+                "-ac", "2",
+                str(output_wav)
+            ]
+            process = await asyncio.create_subprocess_exec(
+                *cmd2,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            err_msg = stderr.decode(errors="replace")
         
         if process.returncode != 0:
-            err_msg = stderr.decode(errors="replace")
-            logger.error(f"FFmpeg extraction failed (code {process.returncode}): {err_msg}")
+            if any(s in err_msg.lower() for s in ["does not contain any stream", "matches no streams", "no audio stream"]):
+                cls.cleanup_file(output_wav)
+                raise ValueError("This video file does not contain an audio track. Please upload a video with sound.")
             cls.cleanup_file(output_wav)
             raise RuntimeError(f"Audio extraction failed: {err_msg[-300:]}")
             
         if not output_wav.exists() or output_wav.stat().st_size == 0:
             cls.cleanup_file(output_wav)
-            raise RuntimeError("FFmpeg generated empty audio output.")
+            raise RuntimeError("FFmpeg generated empty audio output from uploaded media.")
             
         logger.info(f"Audio extracted successfully to {output_wav} ({output_wav.stat().st_size} bytes)")
         return output_wav

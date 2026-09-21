@@ -104,7 +104,8 @@ else:
 MAX_FILE_SIZE_BYTES = 100 * 1024 * 1024  # 100 MB max upload
 ALLOWED_EXTENSIONS = {
     # Video
-    "mp4", "mkv", "mov", "avi", "webm", "flv", "wmv", "3gp", "m4v",
+    "mp4", "mkv", "mov", "avi", "webm", "flv", "wmv", "3gp", "m4v", "ts", "m2ts", "mts", "3g2", "ogv", "f4v",
     # Audio
-    "mp3", "wav", "m4a", "flac", "aac", "ogg", "wma", "opus"
+    "mp3", "wav", "m4a", "flac", "aac", "ogg", "wma", "opus", "aiff", "aif", "caf", "amr", "alac"
 }
+

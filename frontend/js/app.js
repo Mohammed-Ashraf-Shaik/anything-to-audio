@@ -279,17 +279,120 @@ document.addEventListener('DOMContentLoaded', () => {
     btnDetectFile.classList.add('hidden');
   });
 
+  // In-Browser Audio Demuxer & Compact WAV Encoder (Bypasses Vercel 4.5MB Payload Limit)
+  function writeString(view, offset, string) {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  }
+
+  function audioBufferToWavBlob(audioBuffer, maxDurationSeconds = 35) {
+    const sampleRate = audioBuffer.sampleRate;
+    const numChannels = audioBuffer.numberOfChannels;
+    const duration = Math.min(audioBuffer.duration, maxDurationSeconds);
+    const numFrames = Math.floor(duration * sampleRate);
+    
+    // Downmix channels to clean 44.1kHz mono PCM
+    const monoData = new Float32Array(numFrames);
+    const ch0 = audioBuffer.getChannelData(0);
+    if (numChannels > 1) {
+      const ch1 = audioBuffer.getChannelData(1);
+      for (let i = 0; i < numFrames; i++) {
+        monoData[i] = (ch0[i] + ch1[i]) * 0.5;
+      }
+    } else {
+      for (let i = 0; i < numFrames; i++) {
+        monoData[i] = ch0[i];
+      }
+    }
+
+    // 16-bit PCM WAV container
+    const byteRate = sampleRate * 2; // 1 channel * 16-bit
+    const dataSize = numFrames * 2;
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+
+    // RIFF chunk descriptor
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + dataSize, true);
+    writeString(view, 8, 'WAVE');
+    // fmt sub-chunk
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true); // Subchunk1Size
+    view.setUint16(20, 1, true);  // AudioFormat (1 = PCM)
+    view.setUint16(22, 1, true);  // NumChannels (1 = Mono)
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, 2, true);  // BlockAlign
+    view.setUint16(34, 16, true); // BitsPerSample
+    // data sub-chunk
+    writeString(view, 36, 'data');
+    view.setUint32(40, dataSize, true);
+
+    // Write PCM samples with clipping protection
+    let offset = 44;
+    for (let i = 0; i < numFrames; i++) {
+      let s = Math.max(-1, Math.min(1, monoData[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      offset += 2;
+    }
+
+    return new Blob([view], { type: 'audio/wav' });
+  }
+
+  async function extractAudioSnippetFromMedia(file, maxDuration = 35) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return null;
+
+    let audioCtx = null;
+    try {
+      audioCtx = new AudioContextClass();
+      // Read arrayBuffer (up to 50MB)
+      const sliceBuffer = await file.slice(0, Math.min(file.size, 50 * 1024 * 1024)).arrayBuffer();
+      const audioBuffer = await audioCtx.decodeAudioData(sliceBuffer);
+      const wavBlob = audioBufferToWavBlob(audioBuffer, maxDuration);
+      const cleanName = (file.name || "video_audio").replace(/\.[^/.]+$/, "") + ".wav";
+      return new File([wavBlob], cleanName, { type: "audio/wav" });
+    } catch (err) {
+      console.warn("Client-side audio demuxing fell back to raw upload:", err);
+      return null;
+    } finally {
+      if (audioCtx) {
+        try { await audioCtx.close(); } catch (_) {}
+      }
+    }
+  }
+
   btnDetectFile.addEventListener('click', async () => {
     if (!selectedFile) return;
 
-    startPipeline("Uploading and parsing media file...");
+    startPipeline("Analyzing and preparing media file...");
     advancePipelineStep(0);
 
+    let fileToUpload = selectedFile;
+    const ext = selectedFile.name ? selectedFile.name.split('.').pop().toLowerCase() : '';
+    const isVideo = (selectedFile.type && selectedFile.type.startsWith('video/')) ||
+                    ['mp4', 'mov', 'webm', 'mkv', 'avi', 'flv', 'wmv', 'm4v', '3gp', 'ts'].includes(ext);
+
+    // If it's a video file or large media file, perform client-side audio demuxing
+    if (isVideo || selectedFile.size > 4 * 1024 * 1024) {
+      advancePipelineStep(0, "Demuxing audio stream from video in browser...");
+      try {
+        const extractedAudio = await extractAudioSnippetFromMedia(selectedFile, 35);
+        if (extractedAudio && extractedAudio.size > 1000) {
+          console.log(`Extracted compact ${formatBytes(extractedAudio.size)} audio snippet from ${formatBytes(selectedFile.size)} video`);
+          fileToUpload = extractedAudio;
+        }
+      } catch (e) {
+        console.warn("Client-side video demuxer skipped:", e);
+      }
+    }
+
     const formData = new FormData();
-    formData.append('file', selectedFile);
+    formData.append('file', fileToUpload);
 
     try {
-      advancePipelineStep(1, "Extracting 44.1kHz audio stream with FFmpeg...");
+      advancePipelineStep(1, "Processing 44.1kHz audio stream with FFmpeg...");
 
       const response = await fetch(getApiUrl('/api/recognize/file'), {
         method: 'POST',
@@ -299,8 +402,18 @@ document.addEventListener('DOMContentLoaded', () => {
       advancePipelineStep(2, "Computing neural acoustic signature...");
 
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || "Error extracting audio from file.");
+        if (response.status === 413) {
+          throw new Error(`This video file (${formatBytes(selectedFile.size)}) exceeds the cloud upload limit (4.5MB). Tip: Paste the link directly into the 'Video Link' tab, or upload an MP4/WebM video!`);
+        }
+        let errMessage = `Error analyzing media file (Status ${response.status}).`;
+        try {
+          const errData = await response.json();
+          if (errData && errData.detail) errMessage = errData.detail;
+        } catch (_) {
+          const text = await response.text().catch(() => '');
+          if (text) errMessage = text.slice(0, 250);
+        }
+        throw new Error(errMessage);
       }
 
       advancePipelineStep(3, "Querying global music catalog...");
