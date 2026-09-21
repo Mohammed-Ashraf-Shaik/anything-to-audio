@@ -6,24 +6,133 @@ import {
   Platform,
   Linking,
   Alert,
-  StatusBar
+  StatusBar,
+  PermissionsAndroid
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { BUNDLED_HTML } from './assets/bundled_html';
 
-// 24/7 Global Cloud Recognition Engine (No PC Connection Required)
-const CLOUD_BACKEND_URL = 'https://mohammed-ashraf-shaik-sonicam.hf.space';
+// 24/7 Global Cloud Recognition Engine (Live Vercel Production Deployment)
+const CLOUD_BACKEND_URL = 'https://anything-to-audio-am.vercel.app';
 
 export default function App() {
   const webViewRef = useRef(null);
   const [canGoBack, setCanGoBack] = useState(false);
 
-  // JavaScript injected into WebView to guarantee connection to Hugging Face Cloud backend
+  // Request Microphone and Media permissions on Android app startup
+  useEffect(() => {
+    async function requestAndroidPermissions() {
+      if (Platform.OS !== 'android') return;
+      try {
+        const permissions = [
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          PermissionsAndroid.PERMISSIONS.MODIFY_AUDIO_SETTINGS,
+        ];
+
+        // Android 13+ (API 33+) granular media permissions
+        if (Platform.Version >= 33) {
+          if (PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO) {
+            permissions.push(PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO);
+          }
+          if (PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO) {
+            permissions.push(PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO);
+          }
+        } else {
+          if (PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE) {
+            permissions.push(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
+          }
+        }
+
+        await PermissionsAndroid.requestMultiple(permissions);
+      } catch (err) {
+        console.warn('Android permissions request error:', err);
+      }
+    }
+
+    requestAndroidPermissions();
+  }, []);
+
+  // Handle messages from WebView (e.g. explicit microphone re-request)
+  const handleMessage = async (event) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'REQUEST_MIC_PERMISSION' && Platform.OS === 'android') {
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, {
+          title: 'Microphone Permission',
+          message: 'SonicAM needs microphone access to listen to ambient songs and detect music.',
+          buttonPositive: 'Allow',
+          buttonNegative: 'Deny'
+        });
+      }
+    } catch (_) {}
+  };
+
+  // Pre-load script to define environment variables before any page script executes
+  const injectedJavaScriptBeforeContentLoaded = `
+    (function() {
+      window.SONICAM_BACKEND_URL = "${CLOUD_BACKEND_URL}";
+      window.SONICAM_IS_MOBILE_APP = true;
+    })();
+    true;
+  `;
+
+  // Post-load script: guarantees cloud connection and completely removes any APK download UI
   const injectedJavaScript = `
     (function() {
       window.SONICAM_BACKEND_URL = "${CLOUD_BACKEND_URL}";
       window.SONICAM_IS_MOBILE_APP = true;
+
+      // Ensure body has mobile app marker
+      if (document.body) {
+        document.body.classList.add('is-mobile-app');
+      }
+
+      // Add strict styling to hide any APK download buttons inside the APK
+      var styleEl = document.createElement('style');
+      styleEl.innerHTML = [
+        '#btnDirectDownloadApk,',
+        '.hero-apk-badge-wrapper,',
+        '.hero-apk-badge,',
+        'a[href*="SonicAM.apk"],',
+        '.footer-link[href*="SonicAM.apk"] {',
+        '  display: none !important;',
+        '  visibility: hidden !important;',
+        '  height: 0 !important;',
+        '  max-height: 0 !important;',
+        '  margin: 0 !important;',
+        '  padding: 0 !important;',
+        '  overflow: hidden !important;',
+        '  pointer-events: none !important;',
+        '}'
+      ].join('\\n');
+      (document.head || document.documentElement).appendChild(styleEl);
+
+      // Permanently remove elements from DOM
+      function purgeApkElements() {
+        var selectors = [
+          '#btnDirectDownloadApk',
+          '.hero-apk-badge-wrapper',
+          '.hero-apk-badge',
+          'a[href*="SonicAM.apk"]',
+          '.footer-link[href*="SonicAM.apk"]'
+        ];
+        selectors.forEach(function(sel) {
+          document.querySelectorAll(sel).forEach(function(el) {
+            if (el && el.parentNode) {
+              el.parentNode.removeChild(el);
+            }
+          });
+        });
+      }
+
+      purgeApkElements();
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', purgeApkElements);
+      }
+      window.addEventListener('load', purgeApkElements);
+      setTimeout(purgeApkElements, 300);
+      setTimeout(purgeApkElements, 1000);
     })();
     true;
   `;
@@ -58,6 +167,8 @@ export default function App() {
       url === 'about:blank' ||
       url.startsWith('data:') ||
       url.startsWith('blob:') ||
+      url.includes('anything-to-audio-am.vercel.app') ||
+      url.includes('vercel.app') ||
       url.includes('hf.space') ||
       url.includes('huggingface.co')
     ) {
@@ -79,10 +190,16 @@ export default function App() {
             ref={webViewRef}
             source={{ html: BUNDLED_HTML, baseUrl: CLOUD_BACKEND_URL }}
             style={styles.webView}
+            injectedJavaScriptBeforeContentLoaded={injectedJavaScriptBeforeContentLoaded}
             injectedJavaScript={injectedJavaScript}
+            onMessage={handleMessage}
             mediaPlaybackRequiresUserAction={false}
             allowsInlineMediaPlayback={true}
-            userAgent="SonicAMMobile/1.0"
+            mediaCapturePermissionGrantType="grant"
+            allowFileAccess={true}
+            allowFileAccessFromFileURLs={true}
+            allowUniversalAccessFromFileURLs={true}
+            userAgent="SonicAMMobile/1.2.1"
             domStorageEnabled={true}
             javaScriptEnabled={true}
             androidHardwareAccelerationDisabled={false}

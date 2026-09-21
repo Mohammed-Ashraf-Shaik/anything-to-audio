@@ -151,6 +151,19 @@ class MediaProcessor:
             t_param = f"&t={qs['t'][0]}" if 't' in qs else ""
             clean_url = f"https://www.youtube.com/watch?v={video_id}{t_param}"
 
+        # music.youtube.com -> www.youtube.com
+        if "music.youtube.com" in clean_url.lower():
+            clean_url = clean_url.replace("music.youtube.com", "www.youtube.com")
+
+        # youtube.com/embed/<id> -> youtube.com/watch?v=<id>
+        embed_match = re.search(r'youtube\.com/embed/([a-zA-Z0-9_-]+)', clean_url, re.IGNORECASE)
+        if embed_match:
+            clean_url = f"https://www.youtube.com/watch?v={embed_match.group(1)}"
+
+        # Strip Instagram tracking query parameters
+        if "instagram.com" in clean_url.lower():
+            clean_url = clean_url.split('?')[0]
+
         # Check for direct media URL (.mp4, .webm, .mov, etc.)
         url_path = clean_url.split('?')[0].lower()
         is_direct = url_path.endswith((
@@ -249,14 +262,17 @@ class MediaProcessor:
                 '-ac', '2'
             ],
             'extractor_args': {
-                'youtube': {'player_client': ['web', 'mweb', 'android', 'tv']}
+                'youtube': {
+                    'player_client': ['android', 'ios', 'tv'],
+                    'player_skip': ['web', 'mweb', 'configs'],
+                }
             },
             'quiet': True,
             'no_warnings': True,
-            'socket_timeout': 15,
+            'socket_timeout': 20,
             'retries': 3,
             'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
                 'Accept-Language': 'en-US,en;q=0.9',
             }
         }
@@ -367,23 +383,37 @@ class MediaProcessor:
         except Exception as e:
             logger.warning(f"Tier 2 stream demux failed: {e}")
 
-        # Tier 3: Handle platform-specific restrictions with actionable guidance
-        if platform_hint == "instagram":
+        # Tier 3: Translate any technical exceptions into intelligent, actionable guidance
+        err_str = str(download_err).lower() if download_err else ""
+
+        if any(w in err_str for w in ["bot", "sign in", "confirm you", "cookies"]):
             raise RuntimeError(
-                "Instagram requires user login to view this reel or post. "
-                "Tip: Screen-record or download the video clip and drop it directly into the 'Upload File' tab for instant identification!"
+                "YouTube has restricted direct cloud extraction for this link. "
+                "Tip: Upload the video file directly into the 'Upload File' tab, or play the video and use the 'Live Ambient Mic' tab to identify it in seconds!"
+            )
+        elif any(w in err_str for w in ["login", "private", "require", "unauthorized"]) or platform_hint == "instagram":
+            raise RuntimeError(
+                "This video is private, restricted, or requires an account login. "
+                "Tip: Screen-record or save the clip to your device and drop it into the 'Upload File' tab!"
+            )
+        elif any(w in err_str for w in ["geo", "country", "not available in your location"]):
+            raise RuntimeError(
+                "This media stream is geo-restricted in the cloud region. "
+                "Tip: Play the song on your device and tap 'Live Ambient Mic' to identify it in seconds!"
             )
         elif platform_hint == "tiktok":
             raise RuntimeError(
-                "TikTok has restricted direct link extraction for this video. "
-                "Tip: Save the video or sound to your device and drop it directly into the 'Upload File' tab!"
+                "TikTok has restricted direct link streaming for this clip. "
+                "Tip: Screen-record or save the sound and drop it into the 'Upload File' tab!"
             )
         elif platform_hint == "vimeo":
             raise RuntimeError(
-                "This Vimeo video is password-protected or requires login. "
+                "This Vimeo video is password-protected or restricted. "
                 "Please upload the video file directly into the 'Upload File' tab."
             )
 
         err_detail = str(download_err) if download_err else "Audio extraction could not be completed from this URL."
-        raise RuntimeError(f"Could not extract audio from link: {err_detail}")
+        clean_detail = re.sub(r'https?://[^\s]+', '', err_detail).strip()
+        clean_detail = re.sub(r'ERROR:\s*\[[^\]]+\]\s*', '', clean_detail).strip()
+        raise RuntimeError(f"Could not extract audio from link: {clean_detail or err_detail}")
 

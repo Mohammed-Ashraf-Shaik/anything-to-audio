@@ -7,12 +7,20 @@ document.addEventListener('DOMContentLoaded', () => {
   function getApiUrl(endpoint) {
     let base = window.SONICAM_BACKEND_URL || '';
     if (!base && (window.location.protocol === 'file:' || !window.location.origin || window.location.origin === 'null')) {
-      base = 'http://localhost:8000';
+      base = 'https://anything-to-audio-am.vercel.app';
     }
     if (base) {
       return base.replace(/\/+$/, '') + endpoint;
     }
     return endpoint;
+  }
+
+  // If running inside standalone mobile APK, hide all APK download elements
+  if (window.SONICAM_IS_MOBILE_APP) {
+    if (document.body) document.body.classList.add('is-mobile-app');
+    document.querySelectorAll('#btnDirectDownloadApk, .hero-apk-badge-wrapper, .hero-apk-badge, a[href*="SonicAM.apk"], .footer-link[href*="SonicAM.apk"]').forEach(el => {
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    });
   }
 
   // Initialize Visualizer
@@ -104,6 +112,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const fallbackTitle = document.getElementById('fallbackTitle');
   const fallbackArtist = document.getElementById('fallbackArtist');
   const btnRetryNotFound = document.getElementById('btnRetryNotFound');
+  const btnSwitchToFile = document.getElementById('btnSwitchToFile');
+  const btnSwitchToMic = document.getElementById('btnSwitchToMic');
 
   // History Elements
   const btnOpenHistory = document.getElementById('btnOpenHistory');
@@ -440,6 +450,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function startMicRecording() {
     try {
+      // In standalone mobile APK, request Android microphone permission
+      if (window.ReactNativeWebView) {
+        try {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'REQUEST_MIC_PERMISSION' }));
+        } catch (_) {}
+      }
+
       micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       visualizer.connectStream(micStream);
 
@@ -451,11 +468,22 @@ document.addEventListener('DOMContentLoaded', () => {
       micTimer.classList.remove('hidden');
 
       recordedChunks = [];
-      const options = MediaRecorder.isTypeSupported('audio/webm') ? { mimeType: 'audio/webm' } : {};
+      let options = {};
+      if (typeof MediaRecorder !== 'undefined') {
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          options = { mimeType: 'audio/webm;codecs=opus' };
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          options = { mimeType: 'audio/webm' };
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          options = { mimeType: 'audio/mp4' };
+        } else if (MediaRecorder.isTypeSupported('audio/aac')) {
+          options = { mimeType: 'audio/aac' };
+        }
+      }
       mediaRecorder = new MediaRecorder(micStream, options);
 
       mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) recordedChunks.push(e.data);
+        if (e.data && e.data.size > 0) recordedChunks.push(e.data);
       };
 
       mediaRecorder.onstop = async () => {
@@ -469,7 +497,8 @@ document.addEventListener('DOMContentLoaded', () => {
         await uploadMicBlob(audioBlob);
       };
 
-      mediaRecorder.start();
+      // 1000ms timeslice ensures audio data is regularly flushed
+      mediaRecorder.start(1000);
 
       // 15-second countdown
       let remaining = 15;
@@ -486,7 +515,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     } catch (err) {
       console.error("Microphone access error:", err);
-      micStatusText.textContent = "Microphone access denied or unavailable.";
+      micStatusText.textContent = "Microphone access denied or unavailable. Please grant microphone permission in device settings.";
       micStatusText.style.color = "#f87171";
     }
   }
@@ -510,7 +539,9 @@ document.addEventListener('DOMContentLoaded', () => {
     advancePipelineStep(0);
 
     const formData = new FormData();
-    formData.append('audio_blob', blob, 'ambient_mic.webm');
+    const mime = blob.type || 'audio/webm';
+    const ext = mime.includes('mp4') ? 'mp4' : (mime.includes('wav') ? 'wav' : 'webm');
+    formData.append('audio_blob', blob, `ambient_mic.${ext}`);
 
     try {
       advancePipelineStep(1, "FFmpeg normalizer converting voice/sound clip...");
@@ -706,6 +737,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let displayMsg = errMsg || "An unexpected error occurred while analyzing the audio.";
     if (displayMsg.includes('Failed to fetch') || displayMsg.includes('NetworkError') || displayMsg.includes('Load failed')) {
       displayMsg = `Unable to reach the SonicAM backend. Please make sure the server is running and your device is connected to the network.`;
+    } else if (displayMsg.toLowerCase().includes('bot') || displayMsg.toLowerCase().includes('cookies') || displayMsg.toLowerCase().includes('sign in')) {
+      displayMsg = `YouTube has restricted direct cloud extraction for this link. Tip: You can easily identify this song by uploading the video file or playing it aloud with the Live Ambient Mic!`;
     }
     renderNotFound({
       matched: false,
@@ -811,6 +844,24 @@ document.addEventListener('DOMContentLoaded', () => {
     notFoundSection.classList.add('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
+
+  if (btnSwitchToFile) {
+    btnSwitchToFile.addEventListener('click', () => {
+      notFoundSection.classList.add('hidden');
+      const fileTab = document.getElementById('tabFileBtn');
+      if (fileTab) fileTab.click();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  if (btnSwitchToMic) {
+    btnSwitchToMic.addEventListener('click', () => {
+      notFoundSection.classList.add('hidden');
+      const micTab = document.getElementById('tabMicBtn');
+      if (micTab) micTab.click();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
 
   // ==========================================
   // Detection History (Local Storage)

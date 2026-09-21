@@ -2,7 +2,7 @@
   "expo": {
     "name": "SonicAM",
     "slug": "sonicam-mobile",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -20,7 +20,7 @@
     },
     "android": {
       "package": "com.ashraf.sonicam",
-      "versionCode": 6,
+      "versionCode": 7,
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -30,7 +30,10 @@
         "RECORD_AUDIO",
         "MODIFY_AUDIO_SETTINGS",
         "INTERNET",
-        "ACCESS_NETWORK_STATE"
+        "ACCESS_NETWORK_STATE",
+        "READ_EXTERNAL_STORAGE",
+        "READ_MEDIA_AUDIO",
+        "READ_MEDIA_VIDEO"
       ]
     },
     "web": {
