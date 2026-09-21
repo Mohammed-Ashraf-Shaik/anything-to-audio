@@ -5,6 +5,7 @@ import asyncio
 import subprocess
 import logging
 import re
+import urllib.parse
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 
@@ -78,6 +79,100 @@ class MediaProcessor:
         logger.info(f"Audio extracted successfully to {output_wav} ({output_wav.stat().st_size} bytes)")
         return output_wav
 
+    @staticmethod
+    def normalize_video_url(raw_url: str) -> Tuple[str, bool, Optional[str]]:
+        """
+        Normalize video URLs from different platforms (Shorts, youtu.be, mobile shares),
+        strip tracking junk, and detect direct media streams.
+        Returns (clean_url, is_direct_media, platform_hint).
+        """
+        # Extract pure URL from surrounding text or markdown
+        clean_match = re.search(r'https?://[^\s<>"\')\]]+', raw_url)
+        clean_url = clean_match.group(0).rstrip('.,;:') if clean_match else raw_url.strip()
+
+        # Detect platform hint
+        platform_hint = None
+        lower = clean_url.lower()
+        if "instagram.com" in lower:
+            platform_hint = "instagram"
+        elif "tiktok.com" in lower:
+            platform_hint = "tiktok"
+        elif "youtube.com" in lower or "youtu.be" in lower:
+            platform_hint = "youtube"
+        elif "vimeo.com" in lower:
+            platform_hint = "vimeo"
+        elif "twitter.com" in lower or "x.com" in lower:
+            platform_hint = "twitter"
+
+        # YouTube Shorts -> standard watch URL for maximum compatibility
+        shorts_match = re.search(r'(?:https?://)?(?:www\.|m\.)?youtube\.com/shorts/([a-zA-Z0-9_-]+)', clean_url, re.IGNORECASE)
+        if shorts_match:
+            video_id = shorts_match.group(1)
+            clean_url = f"https://www.youtube.com/watch?v={video_id}"
+
+        # youtu.be/<id> -> youtube.com/watch?v=<id>
+        youtu_match = re.search(r'(?:https?://)?youtu\.be/([a-zA-Z0-9_-]+)', clean_url, re.IGNORECASE)
+        if youtu_match:
+            video_id = youtu_match.group(1)
+            parsed = urllib.parse.urlparse(clean_url)
+            qs = urllib.parse.parse_qs(parsed.query)
+            t_param = f"&t={qs['t'][0]}" if 't' in qs else ""
+            clean_url = f"https://www.youtube.com/watch?v={video_id}{t_param}"
+
+        # Check for direct media URL (.mp4, .webm, .mov, etc.)
+        url_path = clean_url.split('?')[0].lower()
+        is_direct = url_path.endswith((
+            '.mp4', '.webm', '.mov', '.m4v', '.mkv', '.avi',
+            '.mp3', '.wav', '.m4a', '.flac', '.ogg', '.opus', '.aac'
+        ))
+
+        return clean_url, is_direct, platform_hint
+
+    @classmethod
+    async def extract_audio_from_stream(
+        cls,
+        stream_url: str,
+        start_time: int = 0,
+        duration: int = 45
+    ) -> Path:
+        """
+        Directly stream and slice audio from a remote media or stream URL into normalized 44.1kHz WAV.
+        Bypasses downloading multi-gigabyte video containers.
+        """
+        output_wav = cls.generate_temp_path("wav")
+        ffmpeg_cmd = [
+            FFMPEG_PATH or "ffmpeg",
+            "-y",
+            "-ss", str(start_time),
+            "-i", str(stream_url),
+            "-t", str(duration),
+            "-vn",
+            "-acodec", "pcm_s16le",
+            "-ar", "44100",
+            "-ac", "2",
+            str(output_wav)
+        ]
+        logger.info(f"Direct stream demuxing via FFmpeg: {' '.join(ffmpeg_cmd[:8])}...")
+        
+        process = await asyncio.create_subprocess_exec(
+            *ffmpeg_cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+        
+        if process.returncode != 0:
+            err_msg = stderr.decode(errors="replace")
+            logger.error(f"FFmpeg stream demuxing failed: {err_msg}")
+            cls.cleanup_file(output_wav)
+            raise RuntimeError(f"FFmpeg stream extraction failed: {err_msg[-200:]}")
+
+        if not output_wav.exists() or output_wav.stat().st_size == 0:
+            cls.cleanup_file(output_wav)
+            raise RuntimeError("FFmpeg generated empty audio output from stream.")
+
+        return output_wav
+
     @classmethod
     async def extract_audio_from_url(
         cls,
@@ -85,23 +180,33 @@ class MediaProcessor:
         duration: int = 45
     ) -> Tuple[Path, Dict[str, Any]]:
         """
-        Extract an audio snippet from any web URL (YouTube, TikTok, Reels, SoundCloud, etc.)
-        using yt-dlp + FFmpeg. Also extracts source metadata (title, author, tags).
+        Extract an audio snippet from any web URL (YouTube, YouTube Shorts, SoundCloud, direct MP4, etc.)
+        using a resilient multi-tier pipeline (yt-dlp with quickjs + FFmpeg direct stream fallback).
         """
-        # Sanitize and extract pure URL from potential prefixes (e.g. "1) https://...", markdown, quotes)
-        clean_match = re.search(r'https?://[^\s<>"\')\]]+', url)
-        clean_url = clean_match.group(0).rstrip('.,;:') if clean_match else url.strip()
+        clean_url, is_direct, platform_hint = cls.normalize_video_url(url)
+        logger.info(f"Normalized URL: {clean_url} (direct: {is_direct}, platform: {platform_hint})")
+
+        # Tier 0: Direct Media URL (MP4, WEBM, MOV, MP3, etc.)
+        if is_direct:
+            try:
+                wav_path = await cls.extract_audio_from_stream(clean_url, start_time=0, duration=duration)
+                extracted_info = {
+                    "source_title": clean_url.split('/')[-1].split('?')[0],
+                    "webpage_url": clean_url
+                }
+                return wav_path, extracted_info
+            except Exception as e:
+                logger.warning(f"Direct stream extraction failed, falling back to yt-dlp: {e}")
 
         output_base = cls.generate_temp_path("snippet")
-        # Template for yt-dlp
         outtmpl = str(output_base.parent / f"{output_base.stem}.%(ext)s")
-        
+
         ydl_opts = {
             'format': 'ba/b/bestaudio/best',
             'outtmpl': outtmpl,
             'ffmpeg_location': FFMPEG_PATH,
             'download_ranges': yt_dlp.utils.download_range_func(None, [(0, duration)]),
-            'playlist_items': '1',       # Download only 1st item for multi-clip posts (Instagram carousels)
+            'playlist_items': '1',
             'noplaylist': True,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
@@ -111,31 +216,87 @@ class MediaProcessor:
                 '-ar', '44100',
                 '-ac', '2'
             ],
+            'extractor_args': {
+                'youtube': {'player_client': ['web', 'mweb', 'android', 'tv']}
+            },
             'quiet': True,
             'no_warnings': True,
             'socket_timeout': 15,
             'retries': 3,
             'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept-Language': 'en-US,en;q=0.9',
             }
         }
 
-        extracted_info = {}
-        
-        def _download():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                try:
-                    info = ydl.extract_info(clean_url, download=True)
-                    return info
-                except yt_dlp.utils.MaxDownloadsReached:
-                    return None
-
-        loop = asyncio.get_running_loop()
+        # Enable QuickJS for YouTube signature solving if available
         try:
-            info = await loop.run_in_executor(None, _download)
+            import quickjs
+            ydl_opts['js_runtimes'] = {'quickjs': {}}
+        except ImportError:
+            pass
+
+        extracted_info = {}
+        loop = asyncio.get_running_loop()
+        download_err = None
+
+        # Tier 1: Try yt-dlp with range slicing
+        def _download_slice():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(clean_url, download=True)
+
+        try:
+            info = await loop.run_in_executor(None, _download_slice)
             if info:
-                # Handle playlist/carousel root object
+                if "entries" in info and info["entries"]:
+                    valid_entries = [e for e in info["entries"] if e]
+                    if valid_entries:
+                        info = valid_entries[0]
+                extracted_info = {
+                    "source_title": info.get("title"),
+                    "source_uploader": info.get("uploader") or info.get("channel"),
+                    "source_artist": info.get("artist"),
+                    "source_track": info.get("track"),
+                    "source_album": info.get("album"),
+                    "source_duration": info.get("duration"),
+                    "source_thumbnail": info.get("thumbnail"),
+                    "webpage_url": info.get("webpage_url", clean_url),
+                }
+        except Exception as e:
+            download_err = e
+            logger.warning(f"Tier 1 yt-dlp slice download failed: {e}")
+
+        # Check if Tier 1 produced a valid WAV
+        expected_wav = output_base.parent / f"{output_base.stem}.wav"
+        if expected_wav.exists() and expected_wav.stat().st_size > 0:
+            return expected_wav, extracted_info
+
+        all_matches = [p for p in output_base.parent.glob(f"{output_base.stem}*") if p.is_file() and p.stat().st_size > 0]
+        wav_matches = [p for p in all_matches if p.suffix.lower() == ".wav"]
+        if wav_matches:
+            return wav_matches[0], extracted_info
+
+        if all_matches:
+            best_candidate = sorted(all_matches, key=lambda p: p.stat().st_size, reverse=True)[0]
+            converted_wav = await cls.extract_audio_from_file(best_candidate, 0, duration)
+            for f in all_matches:
+                if f != converted_wav:
+                    cls.cleanup_file(f)
+            return converted_wav, extracted_info
+
+        # Tier 2: Stream Demux Fallback
+        # Resolve format stream URL (without downloading entire video) and slice directly via FFmpeg
+        logger.info("Attempting Tier 2 direct stream demux fallback...")
+        def _extract_stream_info():
+            info_opts = dict(ydl_opts)
+            info_opts.pop('download_ranges', None)
+            info_opts.pop('postprocessors', None)
+            with yt_dlp.YoutubeDL(info_opts) as ydl:
+                return ydl.extract_info(clean_url, download=False)
+
+        try:
+            info = await loop.run_in_executor(None, _extract_stream_info)
+            if info:
                 if "entries" in info and info["entries"]:
                     valid_entries = [e for e in info["entries"] if e]
                     if valid_entries:
@@ -151,29 +312,46 @@ class MediaProcessor:
                     "source_thumbnail": info.get("thumbnail"),
                     "webpage_url": info.get("webpage_url", clean_url),
                 }
+
+                # Find direct stream URL from audio or progressive format
+                stream_url = info.get('url')
+                if not stream_url and 'requested_formats' in info:
+                    for f in info['requested_formats']:
+                        if f.get('acodec') != 'none' and f.get('url'):
+                            stream_url = f.get('url')
+                            break
+                if not stream_url and 'formats' in info:
+                    audio_formats = [f for f in info['formats'] if f.get('acodec') != 'none' and f.get('url')]
+                    if audio_formats:
+                        stream_url = audio_formats[-1]['url']
+                    elif info['formats']:
+                        stream_url = info['formats'][-1].get('url')
+
+                if stream_url:
+                    stream_wav = await cls.extract_audio_from_stream(stream_url, 0, duration)
+                    if stream_wav.exists() and stream_wav.stat().st_size > 0:
+                        logger.info(f"Tier 2 stream demux succeeded: {stream_wav}")
+                        return stream_wav, extracted_info
         except Exception as e:
-            logger.error(f"yt-dlp download failed: {e}")
-            raise RuntimeError(f"Could not extract audio from URL: {str(e)}")
+            logger.warning(f"Tier 2 stream demux failed: {e}")
 
-        expected_wav = output_base.parent / f"{output_base.stem}.wav"
-        if expected_wav.exists() and expected_wav.stat().st_size > 0:
-            return expected_wav, extracted_info
+        # Tier 3: Handle platform-specific restrictions with actionable guidance
+        if platform_hint == "instagram":
+            raise RuntimeError(
+                "Instagram requires user login to view this reel or post. "
+                "Tip: Screen-record or download the video clip and drop it directly into the 'Upload File' tab for instant identification!"
+            )
+        elif platform_hint == "tiktok":
+            raise RuntimeError(
+                "TikTok has restricted direct link extraction for this video. "
+                "Tip: Save the video or sound to your device and drop it directly into the 'Upload File' tab!"
+            )
+        elif platform_hint == "vimeo":
+            raise RuntimeError(
+                "This Vimeo video is password-protected or requires login. "
+                "Please upload the video file directly into the 'Upload File' tab."
+            )
 
-        # Check for any files starting with the stem
-        all_matches = [p for p in output_base.parent.glob(f"{output_base.stem}*") if p.is_file() and p.stat().st_size > 0]
-        wav_matches = [p for p in all_matches if p.suffix.lower() == ".wav"]
-        if wav_matches:
-            return wav_matches[0], extracted_info
+        err_detail = str(download_err) if download_err else "Audio extraction could not be completed from this URL."
+        raise RuntimeError(f"Could not extract audio from link: {err_detail}")
 
-        if all_matches:
-            # Convert matched media file to wav
-            best_candidate = sorted(all_matches, key=lambda p: p.stat().st_size, reverse=True)[0]
-            converted_wav = await cls.extract_audio_from_file(best_candidate, 0, duration)
-            for f in all_matches:
-                if f != converted_wav:
-                    cls.cleanup_file(f)
-            return converted_wav, extracted_info
-
-        raise RuntimeError("Audio download completed but output file was not found.")
-
-        return expected_wav, extracted_info

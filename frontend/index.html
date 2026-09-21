@@ -114,7 +114,7 @@
       <div class="tabs-body">
         <!-- 1. URL / Link Pane -->
         <div class="tab-pane active" id="tabLink" role="tabpanel">
-          <form id="urlForm" class="input-form">
+          <form id="urlForm" class="input-form" novalidate>
             <div class="url-input-container">
               <div class="input-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -124,10 +124,10 @@
                 </svg>
               </div>
               <input 
-                type="url" 
+                type="text" 
                 id="urlInput" 
                 class="text-input" 
-                placeholder="Paste YouTube, TikTok, Instagram Reels, Twitter/X, SoundCloud or audio URL..." 
+                placeholder="Paste YouTube, Shorts, TikTok, SoundCloud, or direct video/audio URL..." 
                 required
                 autocomplete="off"
               >
@@ -142,11 +142,16 @@
 
             <div class="platform-chips">
               <span class="chip">YouTube & Shorts</span>
-              <span class="chip">TikTok</span>
-              <span class="chip">Instagram Reels</span>
-              <span class="chip">Twitter / X</span>
               <span class="chip">SoundCloud</span>
-              <span class="chip">Direct MP4 / MP3</span>
+              <span class="chip">Direct MP4 / WEBM</span>
+              <span class="chip">TikTok / Reels</span>
+            </div>
+
+            <div class="quick-samples">
+              <span class="samples-label">Quick test:</span>
+              <button type="button" class="sample-tag" data-sample="https://www.youtube.com/watch?v=kJQP7kiw5Fk">Despacito (YouTube)</button>
+              <button type="button" class="sample-tag" data-sample="https://www.youtube.com/shorts/dQw4w9WgXcQ">Never Gonna Give You Up (Shorts)</button>
+              <button type="button" class="sample-tag" data-sample="https://www.youtube.com/watch?v=JGwWNGJdvx8">Shape of You</button>
             </div>
 
             <button type="submit" class="btn-primary" id="btnDetectUrl">

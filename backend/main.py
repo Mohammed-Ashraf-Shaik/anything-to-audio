@@ -64,6 +64,11 @@ async def recognize_url(payload: UrlRecognizeRequest):
         wav_path, source_info = await MediaProcessor.extract_audio_from_url(url, duration=45)
         result = await recognizer.recognize_audio_file(wav_path, source_info=source_info)
         return result
+    except HTTPException:
+        raise
+    except RuntimeError as e:
+        logger.warning(f"Media extraction note for URL {url}: {e}")
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error(f"Error processing URL {url}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

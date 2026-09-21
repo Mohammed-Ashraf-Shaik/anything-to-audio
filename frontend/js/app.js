@@ -203,8 +203,8 @@ document.addEventListener('DOMContentLoaded', () => {
       advancePipelineStep(2, "Generating acoustic landmark fingerprints...");
       
       if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || "Server error occurred while analyzing link.");
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.detail || `Server returned status ${response.status} while analyzing link.`);
       }
 
       advancePipelineStep(3, "Resolving song metadata from global catalog...");
@@ -590,13 +590,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderError(errMsg) {
-    let displayMsg = errMsg;
-    if (errMsg && (errMsg.includes('Failed to fetch') || errMsg.includes('NetworkError') || errMsg.includes('Load failed'))) {
-      displayMsg = `Unable to reach SonicAM Cloud recognition engine. Please check your internet connection and try again.`;
+    let displayMsg = errMsg || "An unexpected error occurred while analyzing the audio.";
+    if (displayMsg.includes('Failed to fetch') || displayMsg.includes('NetworkError') || displayMsg.includes('Load failed')) {
+      displayMsg = `Unable to reach the SonicAM backend. Please make sure the server is running and your device is connected to the network.`;
     }
     renderNotFound({
       matched: false,
-      message: `Analysis failed: ${displayMsg}`
+      message: displayMsg
     });
   }
 

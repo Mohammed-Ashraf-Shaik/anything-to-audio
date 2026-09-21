@@ -55,6 +55,35 @@ else:
         if system_ffmpeg:
             FFMPEG_PATH = system_ffmpeg
 
+# Serverless & Non-standard binary fix:
+# Tools like yt-dlp and FFmpegFD require an executable named literally 'ffmpeg' (or 'ffmpeg.exe')
+# within PATH or at the binary location. imageio_ffmpeg names binaries e.g. 'ffmpeg-linux-x86_64-v7.0.2'.
+if FFMPEG_PATH:
+    ffmpeg_file = Path(FFMPEG_PATH)
+    expected_name = "ffmpeg.exe" if os.name == "nt" else "ffmpeg"
+    if ffmpeg_file.name.lower() != expected_name:
+        try:
+            alias_dir = Path(tempfile.gettempdir()) / "sonic_bin"
+            alias_dir.mkdir(parents=True, exist_ok=True)
+            standard_binary = alias_dir / expected_name
+            if not standard_binary.exists() or standard_binary.stat().st_size == 0:
+                try:
+                    if standard_binary.exists():
+                        standard_binary.unlink(missing_ok=True)
+                    os.symlink(FFMPEG_PATH, standard_binary)
+                except Exception:
+                    shutil.copy2(FFMPEG_PATH, standard_binary)
+            if os.name != "nt":
+                try:
+                    os.chmod(standard_binary, 0o755)
+                except Exception:
+                    pass
+            if standard_binary.exists():
+                FFMPEG_PATH = str(standard_binary)
+                logger.info(f"Created standard ffmpeg executable alias at: {FFMPEG_PATH}")
+        except Exception as e:
+            logger.warning(f"Could not create ffmpeg alias: {e}")
+
 if FFMPEG_PATH:
     ffmpeg_dir = str(Path(FFMPEG_PATH).parent)
     if ffmpeg_dir not in os.environ.get("PATH", ""):
