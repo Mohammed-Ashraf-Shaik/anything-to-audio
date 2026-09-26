@@ -193,10 +193,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const raw = urlInput.value.trim();
     if (!raw) return;
 
-    // Sanitize and extract pure URL if pasted with prefixes like '1) https://...', quotes, or markdown
+    // 1. Sanitize and extract pure URL if pasted with prefixes like 'Check this out: https://...', quotes, or markdown
     const match = raw.match(/https?:\/\/[^\s<>"')\]]+/i);
-    const url = match ? match[0].replace(/[.,;:]+$/, '') : raw;
+    let url = match ? match[0].replace(/[.,;:]+$/, '') : raw;
+
+    // 2. If user pasted domain without protocol (e.g. instagram.com/reel/..., youtu.be/...)
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      if (/^(?:www\.)?(?:youtube\.com|youtu\.be|instagram\.com|tiktok\.com|twitter\.com|x\.com|facebook\.com|fb\.watch|soundcloud\.com|spotify\.com|apple\.com|vimeo\.com|reddit\.com)/i.test(url)) {
+        url = 'https://' + url;
+      }
+    }
     urlInput.value = url;
+
+    // 3. If user typed/pasted a song title, artist, or query directly (no http/https link)
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      startPipeline("Resolving song from global music catalog...");
+      advancePipelineStep(0);
+      advancePipelineStep(1, "Searching song titles and lyrics...");
+      advancePipelineStep(2, "Cross-referencing music catalogs...");
+      try {
+        await resolveAndRenderFallbackSong({ title: raw });
+        stopPipeline();
+      } catch (err) {
+        stopPipeline();
+        renderError(err.message);
+      }
+      return;
+    }
 
     startPipeline("Connecting to media stream...");
     advancePipelineStep(0);
@@ -213,6 +236,13 @@ document.addEventListener('DOMContentLoaded', () => {
       advancePipelineStep(2, "Generating acoustic landmark fingerprints...");
       
       if (!response.ok) {
+        // If server extraction failed, try resolving via title/keywords before failing
+        try {
+          await resolveAndRenderFallbackSong({ title: raw });
+          stopPipeline();
+          return;
+        } catch (_) {}
+
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.detail || `Server returned status ${response.status} while analyzing link.`);
       }
@@ -223,6 +253,12 @@ document.addEventListener('DOMContentLoaded', () => {
       stopPipeline();
       renderResult(data);
     } catch (err) {
+      try {
+        await resolveAndRenderFallbackSong({ title: raw });
+        stopPipeline();
+        return;
+      } catch (_) {}
+
       stopPipeline();
       renderError(err.message);
     }

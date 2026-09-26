@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import shutil
 import logging
 from pathlib import Path
@@ -58,6 +59,16 @@ async def recognize_url(payload: UrlRecognizeRequest):
     if not url:
         raise HTTPException(status_code=400, detail="URL cannot be empty.")
 
+    # 1. If user typed domain without https:// or entered a direct song title/search query
+    if not url.startswith(("http://", "https://")):
+        if re.match(r'^(?:www\.)?(?:youtube\.com|youtu\.be|instagram\.com|tiktok\.com|twitter\.com|x\.com|facebook\.com|fb\.watch|soundcloud\.com|spotify\.com|apple\.com|vimeo\.com|reddit\.com)', url, re.IGNORECASE):
+            url = f"https://{url}"
+        else:
+            logger.info(f"Input is direct song title/query: {url}")
+            resolved = await recognizer.resolve_song_from_metadata({"source_title": url})
+            if resolved and resolved.get("matched"):
+                return resolved
+
     logger.info(f"Received URL recognition request: {url}")
     wav_path = None
     try:
@@ -102,6 +113,10 @@ async def recognize_url(payload: UrlRecognizeRequest):
         raise
     except RuntimeError as e:
         logger.warning(f"Media extraction note for URL {url}: {e}")
+        # If extraction failed, try resolving via title/metadata
+        resolved = await recognizer.resolve_song_from_metadata({"source_title": url})
+        if resolved and resolved.get("matched"):
+            return resolved
         raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         logger.error(f"Error processing URL {url}: {e}", exc_info=True)
