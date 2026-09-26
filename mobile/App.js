@@ -88,14 +88,18 @@ export default function App() {
         document.body.classList.add('is-mobile-app');
       }
 
-      // Add strict styling to hide any APK download buttons inside the APK
+      // Add strict styling to hide any external repo, Hugging Face, or APK download badges inside the APK
       var styleEl = document.createElement('style');
       styleEl.innerHTML = [
         '#btnDirectDownloadApk,',
         '.hero-apk-badge-wrapper,',
         '.hero-apk-badge,',
         'a[href*="SonicAM.apk"],',
-        '.footer-link[href*="SonicAM.apk"] {',
+        '.footer-link[href*="SonicAM.apk"],',
+        'a[href*="github.com"],',
+        'a[href*="huggingface.co"],',
+        '.footer-links,',
+        '.dev-link {',
         '  display: none !important;',
         '  visibility: hidden !important;',
         '  height: 0 !important;',
@@ -115,7 +119,11 @@ export default function App() {
           '.hero-apk-badge-wrapper',
           '.hero-apk-badge',
           'a[href*="SonicAM.apk"]',
-          '.footer-link[href*="SonicAM.apk"]'
+          '.footer-link[href*="SonicAM.apk"]',
+          'a[href*="github.com"]',
+          'a[href*="huggingface.co"]',
+          '.footer-links',
+          '.dev-link'
         ];
         selectors.forEach(function(sel) {
           document.querySelectorAll(sel).forEach(function(el) {
