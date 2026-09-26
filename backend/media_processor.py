@@ -280,9 +280,19 @@ class MediaProcessor:
 
         # Query iTunes Search API with multi-stage candidate matching
         def _search_itunes():
-            candidates = [clean_title.strip(), f"{clean_title} {author}".strip()]
+            candidates = []
+            if author and author.lower() not in clean_title.lower():
+                candidates.append(f"{clean_title} {author}".strip())
+            candidates.append(clean_title.strip())
+            parts = re.split(r'\s*[-—:|]\s*', raw_title)
+            if len(parts) >= 2:
+                p0 = re.sub(r'\[.*?\]|\(.*?\)', '', parts[0]).strip()
+                p1 = re.sub(r'\[.*?\]|\(.*?\)', '', parts[1]).strip()
+                candidates.append(f"{p0} {p1}".strip())
+                candidates.append(f"{p1} {p0}".strip())
+
             for q in candidates:
-                if not q:
+                if not q or len(q) < 2:
                     continue
                 try:
                     itunes_url = f"https://itunes.apple.com/search?term={urllib.parse.quote(q)}&entity=song&limit=1"
@@ -296,44 +306,36 @@ class MediaProcessor:
             return None
 
         itunes_data = await loop.run_in_executor(None, _search_itunes)
-        if not itunes_data or itunes_data.get("resultCount", 0) == 0:
-            # Return video title & channel as graceful match hint
-            return {
-                "direct_result": True,
-                "resolved_song": {
-                    "success": True,
-                    "matched": False,
-                    "message": "No commercial song recognized from this video link. The audio might be speech, dialogue, gaming, or an uncataloged remix.",
-                    "fallback_track": {
-                        "title": raw_title,
-                        "artist": author,
-                        "thumbnail": thumbnail
-                    },
-                    "source_info": {
-                        "source_title": raw_title,
-                        "source_uploader": author,
-                        "source_thumbnail": thumbnail,
-                        "webpage_url": clean_url
-                    }
-                }
-            }
 
-        item = itunes_data["results"][0]
-        track_name = item.get("trackName", clean_title)
-        artist_name = item.get("artistName", author)
-        album_name = item.get("collectionName", "")
-        genre_name = item.get("primaryGenreName", "Music")
-        release_date = (item.get("releaseDate") or "")[:4]
-        preview_url = item.get("previewUrl")
-        cover_art = (item.get("artworkUrl100") or "").replace("100x100bb", "600x600bb") or thumbnail
-        apple_music = item.get("trackViewUrl")
+        if itunes_data and itunes_data.get("resultCount", 0) > 0:
+            item = itunes_data["results"][0]
+            track_name = item.get("trackName", clean_title)
+            artist_name = item.get("artistName", author)
+            album_name = item.get("collectionName", "") or "Single Release"
+            genre_name = item.get("primaryGenreName", "Music")
+            release_date = (item.get("releaseDate") or "")[:4]
+            preview_url = item.get("previewUrl")
+            cover_art = (item.get("artworkUrl100") or "").replace("100x100bb", "600x600bb") or thumbnail
+            apple_music = item.get("trackViewUrl")
+        else:
+            track_name = clean_title or raw_title
+            artist_name = author or "Music Artist"
+            album_name = "Single Release"
+            genre_name = "Music"
+            release_date = None
+            preview_url = None
+            cover_art = thumbnail
+            apple_music = None
+
         search_q = urllib.parse.quote(f"{track_name} {artist_name}")
+        if not apple_music:
+            apple_music = f"https://music.apple.com/us/search?term={search_q}"
 
         song_dict = {
             "title": track_name,
             "artist": artist_name,
             "album": album_name,
-            "label": "iTunes Catalog",
+            "label": "Music Catalog",
             "release_year": release_date,
             "genre": genre_name,
             "cover_art": cover_art,

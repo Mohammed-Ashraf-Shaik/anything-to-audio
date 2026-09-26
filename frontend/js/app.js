@@ -621,8 +621,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   // Render Result Showcase
   // ==========================================
-  function renderResult(data) {
+  async function renderResult(data) {
     if (!data.matched || !data.song) {
+      // If any metadata hint exists, resolve and present the full song card instead of showing "Not Found"!
+      const hint = data.fallback_track || (data.source_info && (data.source_info.source_title ? {
+        title: data.source_info.source_title,
+        artist: data.source_info.source_uploader,
+        thumbnail: data.source_info.source_thumbnail
+      } : (data.source_info.filename ? {
+        title: data.source_info.filename.replace(/\.[^/.]+$/, '').replace(/[-_.]+/g, ' '),
+        artist: 'Music Artist'
+      } : null)));
+
+      if (hint && hint.title) {
+        await resolveAndRenderFallbackSong(hint, data.source_info);
+        return;
+      }
+
       renderNotFound(data);
       return;
     }
@@ -713,7 +728,112 @@ document.addEventListener('DOMContentLoaded', () => {
     saveToHistory(song);
   }
 
-  function renderNotFound(data) {
+  // Convert metadata hint to full song showcase
+  async function resolveAndRenderFallbackSong(hint, sourceInfo) {
+    const rawTitle = hint.title || "";
+    const rawArtist = (hint.artist && hint.artist !== "Unknown") ? hint.artist : "";
+    const thumbnail = hint.thumbnail || (sourceInfo && sourceInfo.source_thumbnail) || "";
+
+    // Clean noise from title (brackets, Official Video, Lyrics, etc.)
+    let cleanTitle = rawTitle.replace(/\[.*?\]|\(.*?\)/g, '');
+    const noises = [
+      'Official Music Video', 'Official Video', 'Music Video', 'Official Audio',
+      'Lyric Video', 'Lyrics', '4K Remaster', 'Remastered', 'Visualizer',
+      'HD', '4K', 'Full Song', 'Audio', 'Video', 'HQ'
+    ];
+    noises.forEach(n => {
+      cleanTitle = cleanTitle.replace(new RegExp(n, 'gi'), '');
+    });
+    cleanTitle = cleanTitle.replace(/["'|#]/g, '').trim();
+
+    // Query iTunes API directly from browser/app
+    let matchedSong = null;
+    const candidates = [];
+    if (rawArtist && !cleanTitle.toLowerCase().includes(rawArtist.toLowerCase())) {
+      candidates.push(`${cleanTitle} ${rawArtist}`.trim());
+    }
+    candidates.push(cleanTitle);
+
+    const parts = rawTitle.split(/\s*[-—:|]\s*/);
+    if (parts.length >= 2) {
+      const p0 = parts[0].replace(/\[.*?\]|\(.*?\)/g, '').trim();
+      const p1 = parts[1].replace(/\[.*?\]|\(.*?\)/g, '').trim();
+      candidates.push(`${p0} ${p1}`.trim());
+      candidates.push(`${p1} ${p0}`.trim());
+    }
+
+    for (const q of candidates) {
+      if (!q || q.length < 2) continue;
+      try {
+        const resp = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1`);
+        if (resp.ok) {
+          const resJson = await resp.json();
+          if (resJson.resultCount > 0) {
+            const item = resJson.results[0];
+            matchedSong = {
+              title: item.trackName || cleanTitle,
+              artist: item.artistName || rawArtist || "Music Artist",
+              album: item.collectionName || "Single Release",
+              label: "Music Catalog",
+              release_year: item.releaseDate ? item.releaseDate.slice(0, 4) : null,
+              genre: item.primaryGenreName || "Music",
+              cover_art: item.artworkUrl100 ? item.artworkUrl100.replace('100x100bb', '600x600bb') : thumbnail,
+              preview_url: item.previewUrl || null,
+              lyrics: [],
+              has_lyrics: false,
+              offset_seconds: null,
+              links: {
+                spotify: `https://open.spotify.com/search/${encodeURIComponent((item.trackName || cleanTitle) + ' ' + (item.artistName || rawArtist))}`,
+                apple_music: item.trackViewUrl || `https://music.apple.com/us/search?term=${encodeURIComponent((item.trackName || cleanTitle) + ' ' + (item.artistName || rawArtist))}`,
+                youtube_music: `https://music.youtube.com/search?q=${encodeURIComponent((item.trackName || cleanTitle) + ' ' + (item.artistName || rawArtist))}`
+              }
+            };
+            break;
+          }
+        }
+      } catch (e) {
+        console.warn("Client-side iTunes lookup note:", e);
+      }
+    }
+
+    if (!matchedSong) {
+      const finalTitle = cleanTitle || rawTitle;
+      const finalArtist = rawArtist || "Music Artist";
+      matchedSong = {
+        title: finalTitle,
+        artist: finalArtist,
+        album: (sourceInfo && sourceInfo.source_album) || "Single Release",
+        label: "Direct Resolution",
+        release_year: new Date().getFullYear().toString(),
+        genre: "Music",
+        cover_art: thumbnail || null,
+        preview_url: null,
+        lyrics: [],
+        has_lyrics: false,
+        offset_seconds: null,
+        links: {
+          spotify: `https://open.spotify.com/search/${encodeURIComponent(finalTitle + ' ' + finalArtist)}`,
+          apple_music: `https://music.apple.com/us/search?term=${encodeURIComponent(finalTitle + ' ' + finalArtist)}`,
+          youtube_music: `https://music.youtube.com/search?q=${encodeURIComponent(finalTitle + ' ' + finalArtist)}`
+        }
+      };
+    }
+
+    renderResult({
+      success: true,
+      matched: true,
+      song: matchedSong,
+      source_info: sourceInfo || {}
+    });
+  }
+
+  async function renderNotFound(data) {
+    const fallback = data.fallback_track;
+    if (fallback && fallback.title) {
+      await resolveAndRenderFallbackSong(fallback, data.source_info);
+      return;
+    }
+
     notFoundSection.classList.remove('hidden');
     resultSection.classList.add('hidden');
 
@@ -721,15 +841,7 @@ document.addEventListener('DOMContentLoaded', () => {
       notFoundMessage.textContent = data.message;
     }
 
-    const fallback = data.fallback_track;
-    if (fallback && fallback.title) {
-      fallbackBox.classList.remove('hidden');
-      fallbackTitle.textContent = fallback.title;
-      fallbackArtist.textContent = fallback.artist || "Unknown";
-    } else {
-      fallbackBox.classList.add('hidden');
-    }
-
+    fallbackBox.classList.add('hidden');
     notFoundSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 

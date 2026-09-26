@@ -92,6 +92,11 @@ async def recognize_url(payload: UrlRecognizeRequest):
                             "song": fallback_res["source_info"]["fallback_song"],
                             "source_info": fallback_res["source_info"]
                         }
+
+            # Final attempt: resolve directly from source_info metadata
+            resolved = await recognizer.resolve_song_from_metadata(source_info or result.get("source_info"))
+            if resolved and resolved.get("matched"):
+                return resolved
         return result
     except HTTPException:
         raise
@@ -155,6 +160,14 @@ async def recognize_file(file: UploadFile = File(...)):
                 "extension": ext
             }
         )
+        if not result.get("matched"):
+            resolved = await recognizer.resolve_song_from_metadata({
+                "filename": file.filename,
+                "file_size": file_size,
+                "extension": ext
+            })
+            if resolved and resolved.get("matched"):
+                return resolved
         return result
 
     except HTTPException:
