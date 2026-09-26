@@ -20,7 +20,7 @@ logger = logging.getLogger("SonicAM.Server")
 app = FastAPI(
     title="SonicAM - Advanced Audio & Music Recognition Engine",
     description="Detect and extract song names, artist details, album art, lyrics, and streaming links from links, videos, audio, and live microphone.",
-    version="1.1.0"
+    version="1.2.3"
 )
 
 # Enable CORS for cross-origin integration
@@ -42,6 +42,7 @@ async def health_check():
     """System health check and diagnostic endpoint."""
     return {
         "status": "healthy",
+        "version": "1.2.3",
         "service": "SonicAM Recognition Engine",
         "ffmpeg_configured": FFMPEG_PATH is not None,
         "ffmpeg_path": FFMPEG_PATH,
@@ -53,21 +54,25 @@ async def health_check():
 async def recognize_url(payload: UrlRecognizeRequest):
     """
     Extract audio from any web or social URL (YouTube, TikTok, Instagram, Twitter, SoundCloud, etc.)
-    and identify the song.
+    and identify the song. If user enters a song title directly, accurately resolves from global catalog.
     """
-    url = payload.url.strip()
-    if not url:
-        raise HTTPException(status_code=400, detail="URL cannot be empty.")
+    raw_input = payload.url.strip()
+    if not raw_input:
+        raise HTTPException(status_code=400, detail="Input cannot be empty.")
 
-    # 1. If user typed domain without https:// or entered a direct song title/search query
-    if not url.startswith(("http://", "https://")):
-        if re.match(r'^(?:www\.)?(?:youtube\.com|youtu\.be|instagram\.com|tiktok\.com|twitter\.com|x\.com|facebook\.com|fb\.watch|soundcloud\.com|spotify\.com|apple\.com|vimeo\.com|reddit\.com)', url, re.IGNORECASE):
-            url = f"https://{url}"
-        else:
-            logger.info(f"Input is direct song title/query: {url}")
-            resolved = await recognizer.resolve_song_from_metadata({"source_title": url})
-            if resolved and resolved.get("matched"):
-                return resolved
+    # 1. Clean URL or detect if user provided domain without https:// or direct song title
+    url = raw_input
+    match = re.search(r'https?://[^\s<>"\'\]]+', raw_input)
+    if match:
+        url = match.group(0).rstrip('.,;:')
+    elif re.match(r'^(?:www\.)?(?:youtube\.com|youtu\.be|instagram\.com|tiktok\.com|twitter\.com|x\.com|facebook\.com|fb\.watch|soundcloud\.com|spotify\.com|apple\.com|vimeo\.com|reddit\.com)', raw_input, re.IGNORECASE):
+        url = f"https://{raw_input}"
+    else:
+        # User entered a direct song title/search query like "Snowman Sia" or "Manwa Laage"
+        logger.info(f"Direct song title/query received: {raw_input}")
+        resolved = await recognizer.resolve_song_from_metadata({"source_title": raw_input})
+        if resolved and resolved.get("matched"):
+            return resolved
 
     logger.info(f"Received URL recognition request: {url}")
     wav_path = None
@@ -114,7 +119,7 @@ async def recognize_url(payload: UrlRecognizeRequest):
     except RuntimeError as e:
         logger.warning(f"Media extraction note for URL {url}: {e}")
         # If extraction failed, try resolving via title/metadata
-        resolved = await recognizer.resolve_song_from_metadata({"source_title": url})
+        resolved = await recognizer.resolve_song_from_metadata({"source_title": raw_input})
         if resolved and resolved.get("matched"):
             return resolved
         raise HTTPException(status_code=422, detail=str(e))
