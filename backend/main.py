@@ -62,7 +62,36 @@ async def recognize_url(payload: UrlRecognizeRequest):
     wav_path = None
     try:
         wav_path, source_info = await MediaProcessor.extract_audio_from_url(url, duration=45)
+        if wav_path is None and source_info and source_info.get("direct_result"):
+            return source_info["resolved_song"]
+
         result = await recognizer.recognize_audio_file(wav_path, source_info=source_info)
+        if not result.get("matched"):
+            if source_info and "fallback_song" in source_info:
+                return {
+                    "success": True,
+                    "matched": True,
+                    "song": source_info["fallback_song"],
+                    "source_info": source_info
+                }
+            # If the video had an intro/dialogue and Shazam missed it, resolve via YouTube metadata
+            if source_info and source_info.get("source_title"):
+                fallback_res = await MediaProcessor.resolve_youtube_fallback(url)
+                if fallback_res:
+                    if fallback_res.get("wav_path"):
+                        prev_res = await recognizer.recognize_audio_file(fallback_res["wav_path"], source_info=fallback_res.get("source_info"))
+                        MediaProcessor.cleanup_file(fallback_res["wav_path"])
+                        if prev_res.get("matched"):
+                            return prev_res
+                    if fallback_res.get("direct_result") and fallback_res.get("resolved_song", {}).get("matched"):
+                        return fallback_res["resolved_song"]
+                    if fallback_res.get("source_info", {}).get("fallback_song"):
+                        return {
+                            "success": True,
+                            "matched": True,
+                            "song": fallback_res["source_info"]["fallback_song"],
+                            "source_info": fallback_res["source_info"]
+                        }
         return result
     except HTTPException:
         raise

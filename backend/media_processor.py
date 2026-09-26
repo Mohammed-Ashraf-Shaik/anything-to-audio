@@ -5,7 +5,9 @@ import asyncio
 import subprocess
 import logging
 import re
+import json
 import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Dict, Any, Optional, Tuple
 
@@ -136,6 +138,12 @@ class MediaProcessor:
         elif "twitter.com" in lower or "x.com" in lower:
             platform_hint = "twitter"
 
+        # Standardize mobile youtube
+        if "music.youtube.com" in clean_url.lower():
+            clean_url = clean_url.replace("music.youtube.com", "www.youtube.com")
+        elif "m.youtube.com" in clean_url.lower():
+            clean_url = clean_url.replace("m.youtube.com", "www.youtube.com")
+
         # YouTube Shorts -> standard watch URL for maximum compatibility
         shorts_match = re.search(r'(?:https?://)?(?:www\.|m\.)?youtube\.com/shorts/([a-zA-Z0-9_-]+)', clean_url, re.IGNORECASE)
         if shorts_match:
@@ -151,14 +159,15 @@ class MediaProcessor:
             t_param = f"&t={qs['t'][0]}" if 't' in qs else ""
             clean_url = f"https://www.youtube.com/watch?v={video_id}{t_param}"
 
-        # music.youtube.com -> www.youtube.com
-        if "music.youtube.com" in clean_url.lower():
-            clean_url = clean_url.replace("music.youtube.com", "www.youtube.com")
-
         # youtube.com/embed/<id> -> youtube.com/watch?v=<id>
         embed_match = re.search(r'youtube\.com/embed/([a-zA-Z0-9_-]+)', clean_url, re.IGNORECASE)
         if embed_match:
             clean_url = f"https://www.youtube.com/watch?v={embed_match.group(1)}"
+
+        # youtube.com/live/<id> -> youtube.com/watch?v=<id>
+        live_match = re.search(r'youtube\.com/live/([a-zA-Z0-9_-]+)', clean_url, re.IGNORECASE)
+        if live_match:
+            clean_url = f"https://www.youtube.com/watch?v={live_match.group(1)}"
 
         # Strip Instagram tracking query parameters
         if "instagram.com" in clean_url.lower():
@@ -178,7 +187,8 @@ class MediaProcessor:
         cls,
         stream_url: str,
         start_time: int = 0,
-        duration: int = 45
+        duration: int = 45,
+        headers: Optional[Dict[str, str]] = None
     ) -> Path:
         """
         Directly stream and slice audio from a remote media or stream URL into normalized 44.1kHz WAV.
@@ -187,7 +197,22 @@ class MediaProcessor:
         output_wav = cls.generate_temp_path("wav")
         ffmpeg_cmd = [
             FFMPEG_PATH or "ffmpeg",
-            "-y",
+            "-y"
+        ]
+
+        if headers:
+            header_str = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+            ffmpeg_cmd.extend(["-headers", header_str])
+
+        # Add robust reconnect options for remote HTTP/HTTPS media streams
+        if stream_url.startswith(("http://", "https://")):
+            ffmpeg_cmd.extend([
+                "-reconnect", "1",
+                "-reconnect_streamed", "1",
+                "-reconnect_delay_max", "5"
+            ])
+
+        ffmpeg_cmd.extend([
             "-ss", str(start_time),
             "-i", str(stream_url),
             "-t", str(duration),
@@ -196,7 +221,7 @@ class MediaProcessor:
             "-ar", "44100",
             "-ac", "2",
             str(output_wav)
-        ]
+        ])
         logger.info(f"Direct stream demuxing via FFmpeg: {' '.join(ffmpeg_cmd[:8])}...")
         
         process = await asyncio.create_subprocess_exec(
@@ -217,6 +242,145 @@ class MediaProcessor:
             raise RuntimeError("FFmpeg generated empty audio output from stream.")
 
         return output_wav
+
+    @classmethod
+    async def resolve_youtube_fallback(cls, clean_url: str) -> Optional[Dict[str, Any]]:
+        """
+        Emergency fallback for YouTube when direct audio downloading is restricted:
+        1. Queries YouTube's official, unauthenticated oEmbed API for verified video title & uploader.
+        2. Searches Apple/iTunes Music API with sanitized song keywords.
+        3. If song matches, downloads high-speed 30s official AAC preview stream into WAV for acoustic recognition.
+        4. If audio preview cannot be fingerprinted, returns rich catalog metadata directly.
+        """
+        loop = asyncio.get_running_loop()
+
+        def _fetch_oembed():
+            try:
+                oembed_url = f"https://www.youtube.com/oembed?url={urllib.parse.quote(clean_url)}&format=json"
+                req = urllib.request.Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
+                with urllib.request.urlopen(req, timeout=6) as resp:
+                    return json.loads(resp.read().decode())
+            except Exception as e:
+                logger.warning(f"YouTube oEmbed lookup failed: {e}")
+                return None
+
+        oembed = await loop.run_in_executor(None, _fetch_oembed)
+        if not oembed:
+            return None
+
+        raw_title = oembed.get("title", "")
+        author = oembed.get("author_name", "")
+        thumbnail = oembed.get("thumbnail_url", "")
+
+        # Clean title for song search: strip [Official Video], (Remastered 2020), etc.
+        clean_title = re.sub(r'[\(\[\{].*?[\)\]\}]', '', raw_title)
+        for noise in ["Official Music Video", "Official Video", "Official Audio", "Lyrics", "Lyric Video", "4K Remaster"]:
+            clean_title = re.sub(re.escape(noise), '', clean_title, flags=re.IGNORECASE)
+        clean_title = clean_title.strip()
+
+        # Query iTunes Search API with multi-stage candidate matching
+        def _search_itunes():
+            candidates = [clean_title.strip(), f"{clean_title} {author}".strip()]
+            for q in candidates:
+                if not q:
+                    continue
+                try:
+                    itunes_url = f"https://itunes.apple.com/search?term={urllib.parse.quote(q)}&entity=song&limit=1"
+                    req = urllib.request.Request(itunes_url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req, timeout=6) as resp:
+                        data = json.loads(resp.read().decode())
+                        if data.get("resultCount", 0) > 0:
+                            return data
+                except Exception as e:
+                    logger.warning(f"iTunes query failed for '{q}': {e}")
+            return None
+
+        itunes_data = await loop.run_in_executor(None, _search_itunes)
+        if not itunes_data or itunes_data.get("resultCount", 0) == 0:
+            # Return video title & channel as graceful match hint
+            return {
+                "direct_result": True,
+                "resolved_song": {
+                    "success": True,
+                    "matched": False,
+                    "message": "No commercial song recognized from this video link. The audio might be speech, dialogue, gaming, or an uncataloged remix.",
+                    "fallback_track": {
+                        "title": raw_title,
+                        "artist": author,
+                        "thumbnail": thumbnail
+                    },
+                    "source_info": {
+                        "source_title": raw_title,
+                        "source_uploader": author,
+                        "source_thumbnail": thumbnail,
+                        "webpage_url": clean_url
+                    }
+                }
+            }
+
+        item = itunes_data["results"][0]
+        track_name = item.get("trackName", clean_title)
+        artist_name = item.get("artistName", author)
+        album_name = item.get("collectionName", "")
+        genre_name = item.get("primaryGenreName", "Music")
+        release_date = (item.get("releaseDate") or "")[:4]
+        preview_url = item.get("previewUrl")
+        cover_art = (item.get("artworkUrl100") or "").replace("100x100bb", "600x600bb") or thumbnail
+        apple_music = item.get("trackViewUrl")
+        search_q = urllib.parse.quote(f"{track_name} {artist_name}")
+
+        song_dict = {
+            "title": track_name,
+            "artist": artist_name,
+            "album": album_name,
+            "label": "iTunes Catalog",
+            "release_year": release_date,
+            "genre": genre_name,
+            "cover_art": cover_art,
+            "preview_url": preview_url,
+            "lyrics": [],
+            "has_lyrics": False,
+            "offset_seconds": None,
+            "links": {
+                "shazam": None,
+                "spotify": f"https://open.spotify.com/search/{search_q}",
+                "apple_music": apple_music,
+                "youtube_music": f"https://music.youtube.com/search?q={search_q}"
+            }
+        }
+
+        # If preview_url is available, download and slice 30s preview so Shazam can do acoustic landmark recognition!
+        if preview_url:
+            try:
+                preview_wav = await cls.extract_audio_from_stream(preview_url, start_time=0, duration=30)
+                if preview_wav.exists() and preview_wav.stat().st_size > 0:
+                    return {
+                        "wav_path": preview_wav,
+                        "source_info": {
+                            "source_title": raw_title,
+                            "source_uploader": author,
+                            "source_thumbnail": cover_art,
+                            "webpage_url": clean_url,
+                            "fallback_song": song_dict
+                        }
+                    }
+            except Exception as e:
+                logger.warning(f"Preview extraction failed: {e}")
+
+        return {
+            "direct_result": True,
+            "resolved_song": {
+                "success": True,
+                "matched": True,
+                "song": song_dict,
+                "source_info": {
+                    "source_title": raw_title,
+                    "source_uploader": author,
+                    "source_thumbnail": cover_art,
+                    "webpage_url": clean_url
+                }
+            }
+        }
 
     @classmethod
     async def extract_audio_from_url(
@@ -263,18 +427,13 @@ class MediaProcessor:
             ],
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'ios', 'tv'],
-                    'player_skip': ['web', 'mweb', 'configs'],
+                    'player_client': ['visionos', 'android_vr', 'android', 'web'],
                 }
             },
             'quiet': True,
             'no_warnings': True,
             'socket_timeout': 20,
             'retries': 3,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-                'Accept-Language': 'en-US,en;q=0.9',
-            }
         }
 
         # Enable QuickJS for YouTube signature solving if available
@@ -363,25 +522,46 @@ class MediaProcessor:
 
                 # Find direct stream URL from audio or progressive format
                 stream_url = info.get('url')
+                stream_headers = None
                 if not stream_url and 'requested_formats' in info:
                     for f in info['requested_formats']:
                         if f.get('acodec') != 'none' and f.get('url'):
                             stream_url = f.get('url')
+                            stream_headers = f.get('http_headers')
                             break
                 if not stream_url and 'formats' in info:
                     audio_formats = [f for f in info['formats'] if f.get('acodec') != 'none' and f.get('url')]
                     if audio_formats:
-                        stream_url = audio_formats[-1]['url']
+                        best_f = audio_formats[-1]
+                        stream_url = best_f['url']
+                        stream_headers = best_f.get('http_headers')
                     elif info['formats']:
-                        stream_url = info['formats'][-1].get('url')
+                        best_f = info['formats'][-1]
+                        stream_url = best_f.get('url')
+                        stream_headers = best_f.get('http_headers')
 
                 if stream_url:
-                    stream_wav = await cls.extract_audio_from_stream(stream_url, 0, duration)
+                    stream_wav = await cls.extract_audio_from_stream(
+                        stream_url, 0, duration, headers=stream_headers
+                    )
                     if stream_wav.exists() and stream_wav.stat().st_size > 0:
                         logger.info(f"Tier 2 stream demux succeeded: {stream_wav}")
                         return stream_wav, extracted_info
         except Exception as e:
             logger.warning(f"Tier 2 stream demux failed: {e}")
+
+        # Tier 2.5: Resilient YouTube Metadata & Preview Fallback
+        if platform_hint == "youtube":
+            logger.info("Attempting Tier 2.5 YouTube metadata & preview fallback...")
+            try:
+                fallback_res = await cls.resolve_youtube_fallback(clean_url)
+                if fallback_res:
+                    if fallback_res.get("wav_path"):
+                        return fallback_res["wav_path"], fallback_res.get("source_info", {})
+                    elif fallback_res.get("direct_result"):
+                        return None, fallback_res
+            except Exception as e:
+                logger.warning(f"Tier 2.5 YouTube fallback encountered: {e}")
 
         # Tier 3: Translate any technical exceptions into intelligent, actionable guidance
         err_str = str(download_err).lower() if download_err else ""

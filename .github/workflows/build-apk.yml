@@ -133,8 +133,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         with:
-          tag_name: v1.2.1
-          name: "SonicAM Universal Android Release v1.2.1 (Phones & Tablets)"
+          tag_name: v1.2.2
+          name: "SonicAM Universal Android Release v1.2.2 (Phones & Tablets)"
           make_latest: true
           body: |
             ### ☕ SonicAM - Anything to Audio & Song Recognition Engine (Universal Android APK)

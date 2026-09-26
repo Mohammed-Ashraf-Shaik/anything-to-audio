@@ -1,8 +1,8 @@
-# ☕ SonicAM — Anything to Audio & Universal Song Recognition Engine (v1.2.1)
+# ☕ SonicAM — Anything to Audio & Universal Song Recognition Engine (v1.2.2)
 
 <div align="center">
 
-[![Direct Download APK](https://img.shields.io/badge/⬇️%20DIRECT%20DOWNLOAD%20APK-SonicAM%20v1.2.1%20(Universal)-e5a950?style=for-the-badge&logo=android&logoColor=black)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases/latest/download/SonicAM.apk)
+[![Direct Download APK](https://img.shields.io/badge/⬇️%20DIRECT%20DOWNLOAD%20APK-SonicAM%20v1.2.2%20(Universal)-e5a950?style=for-the-badge&logo=android&logoColor=black)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases/latest/download/SonicAM.apk)
 [![Live Web Engine (Vercel)](https://img.shields.io/badge/🌐%20LIVE%20WEBSITE-SonicAM%20Cloud%20Engine-009688?style=for-the-badge&logo=vercel&logoColor=white)](https://anything-to-audio-am.vercel.app/)
 [![Hugging Face Space](https://img.shields.io/badge/🤗%20Hugging%20Face-SonicAM%20Space-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)](https://huggingface.co/spaces/Mohammed-Ashraf-Shaik/SONICAM)
 [![All Androids & Tabs](https://img.shields.io/badge/Compatibility-All%20Android%20Phones%20%26%20Tablets%20(7.0%20to%2015+)-d97706?style=for-the-badge&logo=googleplay&logoColor=white)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases)
@@ -16,7 +16,7 @@
 
 > **Extract, detect, and identify any song in seconds from social media links, video containers, raw audio tracks, or live ambient microphone — styled in a luxurious roasted coffee, mocha & warm caramel aesthetic.**
 
-![Version 1.2.1](https://img.shields.io/badge/Release-v1.2.1-brightgreen?style=for-the-badge)
+![Version 1.2.2](https://img.shields.io/badge/Release-v1.2.2-brightgreen?style=for-the-badge)
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![Shazam Landmark](https://img.shields.io/badge/Shazam-Acoustic%20AI-0088ff?style=for-the-badge&logo=apple&logoColor=white)
