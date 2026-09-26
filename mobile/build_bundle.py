@@ -38,10 +38,25 @@ app_js = app_js.replace("fetch('/api/recognize/mic'", "fetch(getApiUrl('/api/rec
 html = html.replace('href="assets/icon.png"', f'href="{icon_data_uri}"')
 html = html.replace('src="assets/icon.png"', f'src="{icon_data_uri}"')
 
-# 3. Surgically remove all 'Download APK' elements from the bundled HTML for mobile
+# 3. Surgically remove all 'Download APK', GitHub, and HuggingFace elements from mobile APK
 html = re.sub(r'<div class="hero-apk-badge-wrapper">.*?</div>\s*', '', html, flags=re.DOTALL)
 html = re.sub(r'<a\s+[^>]*id="btnDirectDownloadApk"[^>]*>.*?</a>\s*', '', html, flags=re.DOTALL)
 html = re.sub(r'<a\s+[^>]*href="[^"]*SonicAM\.apk"[^>]*>.*?</a>\s*', '', html, flags=re.DOTALL)
+html = re.sub(r'<a\s+[^>]*href="[^"]*github\.com[^"]*"[^>]*>.*?</a>\s*', '', html, flags=re.DOTALL)
+html = re.sub(r'<a\s+[^>]*href="[^"]*huggingface\.co[^"]*"[^>]*>.*?</a>\s*', '', html, flags=re.DOTALL)
+html = re.sub(r'<div class="footer-links">.*?</div>\s*', '', html, flags=re.DOTALL)
+
+# Add exclusive Native Mobile App branding in footer
+mobile_footer = """
+<div class="mobile-app-branding">
+  <div class="mobile-app-badge-pill">
+    <span class="pulse-dot"></span>
+    <span>SonicAM Mobile Pro</span>
+  </div>
+  <p class="mobile-version-tag">Professional Neural Audio Recognition Engine • v1.2.3</p>
+</div>
+"""
+html = html.replace('<footer class="app-footer">', f'<footer class="app-footer">\n{mobile_footer}')
 
 # 4. Clean file input accept attribute for Android WebView native file picker
 html = html.replace(
@@ -52,12 +67,16 @@ html = html.replace(
 # 5. Inline CSS and mobile-specific app overrides
 mobile_css = """
 <style>
-/* Completely hide and eliminate all APK download elements inside the APK application */
+/* Completely hide and eliminate all web/repo/APK badges inside the mobile APK */
 #btnDirectDownloadApk,
 .hero-apk-badge-wrapper,
 .hero-apk-badge,
 a[href*="SonicAM.apk"],
-.footer-link[href*="SonicAM.apk"] {
+.footer-link[href*="SonicAM.apk"],
+a[href*="github.com"],
+a[href*="huggingface.co"],
+.footer-links,
+.dev-link {
   display: none !important;
   visibility: hidden !important;
   height: 0 !important;
@@ -84,21 +103,22 @@ function getApiUrl(endpoint) {
     return endpoint;
 }
 
-// Ensure body has mobile class and any leftover APK elements are purged
+// Ensure body has mobile class and any leftover web/repo/APK elements are purged
 (function() {
-    function purgeApk() {
+    function purgeWebBadges() {
         if (document.body) document.body.classList.add('is-mobile-app');
-        var bad = document.querySelectorAll('#btnDirectDownloadApk, .hero-apk-badge-wrapper, .hero-apk-badge, a[href*="SonicAM.apk"], .footer-link[href*="SonicAM.apk"]');
+        var bad = document.querySelectorAll('#btnDirectDownloadApk, .hero-apk-badge-wrapper, .hero-apk-badge, a[href*="SonicAM.apk"], a[href*="github.com"], a[href*="huggingface.co"], .footer-links, .dev-link');
         bad.forEach(function(el) {
             if (el && el.parentNode) el.parentNode.removeChild(el);
         });
     }
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', purgeApk);
+        document.addEventListener('DOMContentLoaded', purgeWebBadges);
     } else {
-        purgeApk();
+        purgeWebBadges();
     }
-    setTimeout(purgeApk, 200);
+    setTimeout(purgeWebBadges, 100);
+    setTimeout(purgeWebBadges, 400);
 })();
 </script>
 """

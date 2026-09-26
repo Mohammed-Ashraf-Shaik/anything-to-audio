@@ -124,6 +124,31 @@ document.addEventListener('DOMContentLoaded', () => {
   const historyEmpty = document.getElementById('historyEmpty');
   const historyCounter = document.getElementById('historyCounter');
   const btnClearHistory = document.getElementById('btnClearHistory');
+  const btnClearUrl = document.getElementById('btnClearUrl');
+  const btnShareSong = document.getElementById('btnShareSong');
+  const btnLoopAudio = document.getElementById('btnLoopAudio');
+  const btnExportHistory = document.getElementById('btnExportHistory');
+  const toastNotification = document.getElementById('toastNotification');
+
+  // Toast Notification Utility
+  function showToast(message, duration = 2400) {
+    if (!toastNotification) return;
+    toastNotification.textContent = message;
+    toastNotification.classList.remove('hidden');
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(() => {
+      toastNotification.classList.add('hidden');
+    }, duration);
+  }
+
+  // Mobile App Cleanup: strip web/repo/APK badges in APK WebView
+  if (window.ReactNativeWebView || window.SONICAM_IS_MOBILE_APP || document.body.classList.contains('is-mobile-app')) {
+    document.body.classList.add('is-mobile-app');
+    const toRemove = document.querySelectorAll(
+      '#btnDirectDownloadApk, .hero-apk-badge-wrapper, .hero-apk-badge, a[href*="SonicAM.apk"], a[href*="github.com"], a[href*="huggingface.co"], .footer-links, .dev-link'
+    );
+    toRemove.forEach(el => el.remove());
+  }
 
   // State Variables
   let selectedFile = null;
@@ -164,16 +189,38 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==========================================
   // URL Input Handlers
   // ==========================================
+  if (btnClearUrl && urlInput) {
+    const toggleClearBtn = () => {
+      if (urlInput.value.trim().length > 0) {
+        btnClearUrl.classList.remove('hidden');
+      } else {
+        btnClearUrl.classList.add('hidden');
+      }
+    };
+    urlInput.addEventListener('input', toggleClearBtn);
+    btnClearUrl.addEventListener('click', () => {
+      urlInput.value = '';
+      toggleClearBtn();
+      urlInput.focus();
+    });
+  }
+
   if (btnPasteUrl) {
     btnPasteUrl.addEventListener('click', async () => {
       try {
         const text = await navigator.clipboard.readText();
-        if (text) {
+        if (text && text.trim()) {
           urlInput.value = text.trim();
-          urlInput.focus();
+          if (btnClearUrl) btnClearUrl.classList.remove('hidden');
+          showToast("Pasted! Identifying song...");
+          // Auto-trigger detection immediately for native feel
+          urlForm.dispatchEvent(new Event('submit'));
+        } else {
+          showToast("Clipboard is empty");
         }
       } catch (err) {
         console.warn('Could not read clipboard:', err);
+        showToast("Tip: Tap & paste link into the box");
       }
     });
   }
@@ -760,6 +807,11 @@ document.addEventListener('DOMContentLoaded', () => {
     notFoundSection.classList.add('hidden');
     resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+    // Haptic feedback vibration on mobile devices
+    if (navigator.vibrate) {
+      try { navigator.vibrate([40, 50, 40]); } catch (_) {}
+    }
+
     // Save to History
     saveToHistory(song);
   }
@@ -972,14 +1024,42 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  btnCopyLyrics.addEventListener('click', () => {
+  btnCopyLyrics.addEventListener('click', async () => {
     if (lyricsText.textContent) {
-      navigator.clipboard.writeText(lyricsText.textContent);
-      btnCopyLyrics.querySelector('span').textContent = 'Lyrics Copied!';
-      setTimeout(() => {
-        btnCopyLyrics.querySelector('span').textContent = 'Copy Full Lyrics';
-      }, 2000);
+      try {
+        await navigator.clipboard.writeText(lyricsText.textContent);
+        btnCopyLyrics.querySelector('span').textContent = 'Lyrics Copied!';
+        showToast("✓ Lyrics copied to clipboard!");
+        setTimeout(() => {
+          btnCopyLyrics.querySelector('span').textContent = 'Copy Full Lyrics';
+        }, 2000);
+      } catch (_) {
+        showToast("Lyrics text selected");
+      }
     }
+  });
+
+  // Permanent Network Awareness (W3C standard, works offline/online indefinitely)
+  window.addEventListener('online', () => {
+    const statusText = document.getElementById('statusText');
+    const systemBadge = document.getElementById('systemBadge');
+    if (statusText) statusText.textContent = 'System Ready';
+    if (systemBadge) {
+      const dot = systemBadge.querySelector('.status-dot');
+      if (dot) dot.style.background = '#10b981';
+    }
+    showToast('🌐 Internet connection restored');
+  });
+
+  window.addEventListener('offline', () => {
+    const statusText = document.getElementById('statusText');
+    const systemBadge = document.getElementById('systemBadge');
+    if (statusText) statusText.textContent = 'Offline';
+    if (systemBadge) {
+      const dot = systemBadge.querySelector('.status-dot');
+      if (dot) dot.style.background = '#f59e0b';
+    }
+    showToast('⚠️ No internet connection detected');
   });
 
   btnIdentifyAnother.addEventListener('click', () => {
@@ -987,6 +1067,67 @@ document.addEventListener('DOMContentLoaded', () => {
     resultSection.classList.add('hidden');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
+
+  if (btnShareSong) {
+    btnShareSong.addEventListener('click', async () => {
+      const title = songTitle.textContent;
+      const artist = songArtist.textContent;
+      const link = (linkSpotify && !linkSpotify.classList.contains('hidden') ? linkSpotify.href : null) ||
+                   (linkYtMusic && !linkYtMusic.classList.contains('hidden') ? linkYtMusic.href : null) ||
+                   window.location.href;
+      const shareData = {
+        title: `${title} - ${artist}`,
+        text: `🎵 Identified with SonicAM: "${title}" by ${artist}\nListen here:`,
+        url: link
+      };
+
+      if (navigator.share) {
+        try {
+          await navigator.share(shareData);
+          return;
+        } catch (e) {
+          if (e.name === 'AbortError') return;
+        }
+      }
+
+      // Fallback: Clipboard copy
+      try {
+        await navigator.clipboard.writeText(`🎵 "${title}" by ${artist} — ${link}`);
+        showToast("✓ Track details copied to clipboard!");
+      } catch (_) {
+        showToast(`"${title}" by ${artist}`);
+      }
+    });
+  }
+
+  if (btnLoopAudio && audioPreviewElement) {
+    btnLoopAudio.addEventListener('click', () => {
+      audioPreviewElement.loop = !audioPreviewElement.loop;
+      btnLoopAudio.classList.toggle('active', audioPreviewElement.loop);
+      showToast(audioPreviewElement.loop ? "🔁 30s Loop: ON" : "➡️ 30s Loop: OFF");
+    });
+  }
+
+  if (btnExportHistory) {
+    btnExportHistory.addEventListener('click', async () => {
+      if (!historyItems || historyItems.length === 0) {
+        showToast("No history items to export yet!");
+        return;
+      }
+
+      let text = `🎵 SonicAM Identified Songs (${historyItems.length} tracks):\n\n`;
+      historyItems.forEach((s, idx) => {
+        text += `${idx + 1}. ${s.title} — ${s.artist} (${s.album || 'Single'})\n`;
+      });
+
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast(`✓ Copied ${historyItems.length} tracks playlist to clipboard!`);
+      } catch (_) {
+        showToast(`History has ${historyItems.length} songs`);
+      }
+    });
+  }
 
   btnRetryNotFound.addEventListener('click', () => {
     notFoundSection.classList.add('hidden');
