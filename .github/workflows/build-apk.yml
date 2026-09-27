@@ -61,127 +61,115 @@ jobs:
       - name: 🏗️ Expo Prebuild (Generate Native Android Project)
         working-directory: ./mobile
         run: |
+          # Regenerate the bundled WebView HTML asset
           python3 build_bundle.py || true
+
+          # Generate the native Android project from the Expo config
           npx expo prebuild --platform android --clean
 
-          # Allow HTTP traffic
+          # Allow cleartext HTTP so the WebView can reach the cloud backend
           sed -i 's/<application /<application android:usesCleartextTraffic="true" /g' \
             android/app/src/main/AndroidManifest.xml || true
 
-      - name: 📦 Embed JS Bundle into APK Assets (CRITICAL)
-        working-directory: ./mobile
-        run: |
-          # This is the ONLY correct command for Expo managed workflow.
-          # It pre-generates index.android.bundle so the APK runs standalone
-          # WITHOUT needing Metro dev server (localhost:8081).
-          mkdir -p android/app/src/main/assets
-
-          npx expo export:embed \
-            --platform android \
-            --entry-file index.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
-            --assets-dest android/app/src/main/res \
-            --dev false
-
-          echo "=== Bundle generated ==="
-          ls -lh android/app/src/main/assets/index.android.bundle
-          echo "Bundle size: $(stat -c%s android/app/src/main/assets/index.android.bundle) bytes"
-
-          # Sanity check: must be at least 100KB to be a valid bundle
-          BUNDLE_SIZE=$(stat -c%s android/app/src/main/assets/index.android.bundle)
-          if [ "$BUNDLE_SIZE" -lt 102400 ]; then
-            echo "FATAL: Bundle is too small ($BUNDLE_SIZE bytes) — likely empty or broken!"
-            exit 1
-          fi
-          echo "Bundle OK: $BUNDLE_SIZE bytes"
-
-      - name: 🔨 Build Standalone APK
+      - name: 🔧 Configure Gradle for Standalone (No Metro Required)
         working-directory: ./mobile/android
-        env:
-          NODE_PATH: "${{ github.workspace }}/mobile/node_modules"
         run: |
-          chmod +x gradlew
+          # BUNDLE_IN_DEBUG=true  → Gradle embeds the JS bundle into the DEBUG APK
+          #                          so it runs without needing Metro dev server
+          # BUNDLE_IN_RELEASE=true → same for RELEASE (this is the default, but explicit is safe)
+          # newArchEnabled=false   → disable new arch to maximise device compatibility
+          # hermesEnabled=true     → use Hermes JS engine (required for Expo SDK 52)
+          cat >> gradle.properties << 'EOF'
+          BUNDLE_IN_DEBUG=true
+          BUNDLE_IN_RELEASE=true
+          newArchEnabled=false
+          hermesEnabled=true
+          org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m
+          EOF
+
+          echo "=== gradle.properties (last 10 lines) ==="
+          tail -10 gradle.properties
+
+      - name: 🔨 Build Debug APK (Standalone, No Play Protect Warnings)
+        if: ${{ github.event.inputs.build_type != 'release' }}
+        working-directory: ./mobile/android
+        run: |
           export PATH="${{ github.workspace }}/mobile/node_modules/.bin:$PATH"
+          export NODE_PATH="${{ github.workspace }}/mobile/node_modules"
 
-          # Critical Gradle flags
-          {
-            echo "newArchEnabled=false"
-            echo "hermesEnabled=true"
-            echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m"
-            # BUNDLE_IN_DEBUG/RELEASE=false tells Gradle to skip its own bundling
-            # step because we already embedded the bundle above
-            echo "BUNDLE_IN_DEBUG=false"
-            echo "BUNDLE_IN_RELEASE=false"
-          } >> gradle.properties
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
-          BUILD_CHOICE="${{ github.event.inputs.build_type || 'both' }}"
+          mkdir -p app/build/outputs/apk/output
+          cp app/build/outputs/apk/debug/app-debug.apk \
+             app/build/outputs/apk/output/SonicAM-Debug.apk
+
+          # VERIFY the JS bundle is physically inside the APK
+          echo "=== Checking JS bundle is inside Debug APK ==="
+          unzip -l app/build/outputs/apk/output/SonicAM-Debug.apk | grep "index.android.bundle" \
+            || { echo "FATAL: JS bundle missing from Debug APK!"; exit 1; }
+
+          echo "✅ Debug APK OK: $(stat -c%s app/build/outputs/apk/output/SonicAM-Debug.apk) bytes"
+
+      - name: 🔨 Build Release APK (Signed Standalone)
+        if: ${{ github.event.inputs.build_type != 'debug' }}
+        working-directory: ./mobile/android
+        run: |
+          export PATH="${{ github.workspace }}/mobile/node_modules/.bin:$PATH"
+          export NODE_PATH="${{ github.workspace }}/mobile/node_modules"
+
+          chmod +x gradlew
+
+          # Keystore for signing
+          KEYSTORE="${{ github.workspace }}/mobile/sonicam-release.keystore"
+          if [ ! -f "$KEYSTORE" ]; then
+            echo "Generating keystore..."
+            keytool -genkey -v \
+              -keystore "$KEYSTORE" -alias sonicam \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass sonicam123 -keypass sonicam123 \
+              -dname "CN=SonicAM,OU=Mobile,O=SonicAM,C=US"
+          fi
+
+          ./gradlew assembleRelease --stacktrace --no-daemon
+
+          ZIPALIGN=$(find $ANDROID_HOME/build-tools -name zipalign | sort -V | tail -n1)
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n1)
+          RELEASE_DIR="app/build/outputs/apk/release"
           mkdir -p app/build/outputs/apk/output
 
-          # ── Debug APK ─────────────────────────────────────────────────
-          if [ "$BUILD_CHOICE" = "debug" ] || [ "$BUILD_CHOICE" = "both" ]; then
-            echo "=== Building Debug APK ==="
-            ./gradlew assembleDebug --stacktrace --no-daemon
-            cp app/build/outputs/apk/debug/app-debug.apk \
-               app/build/outputs/apk/output/SonicAM-Debug.apk
+          echo "=== Release dir contents ==="
+          ls -lah "$RELEASE_DIR"
 
-            echo "=== Verifying JS bundle is INSIDE the Debug APK ==="
-            unzip -l app/build/outputs/apk/output/SonicAM-Debug.apk \
-              | grep "index.android.bundle" \
-              || { echo "FATAL: bundle missing from Debug APK!"; exit 1; }
-
-            echo "Debug APK OK: $(stat -c%s app/build/outputs/apk/output/SonicAM-Debug.apk) bytes"
+          # Pick the unsigned or already-signed APK
+          if [ -f "$RELEASE_DIR/app-release-unsigned.apk" ]; then
+            SRC="$RELEASE_DIR/app-release-unsigned.apk"
+          elif [ -f "$RELEASE_DIR/app-release.apk" ]; then
+            SRC="$RELEASE_DIR/app-release.apk"
+          else
+            echo "FATAL: No release APK found!"; exit 1
           fi
 
-          # ── Release APK ───────────────────────────────────────────────
-          if [ "$BUILD_CHOICE" = "release" ] || [ "$BUILD_CHOICE" = "both" ]; then
-            echo "=== Building Release APK ==="
+          $ZIPALIGN -p -f 4 "$SRC" app/build/outputs/apk/output/aligned.apk
+          $APKSIGNER sign \
+            --ks "$KEYSTORE" --ks-alias sonicam --ks-pass pass:sonicam123 \
+            --out app/build/outputs/apk/output/SonicAM-Release.apk \
+            app/build/outputs/apk/output/aligned.apk
 
-            KEYSTORE="${{ github.workspace }}/mobile/sonicam-release.keystore"
-            if [ ! -f "$KEYSTORE" ]; then
-              keytool -genkey -v \
-                -keystore "$KEYSTORE" -alias sonicam \
-                -keyalg RSA -keysize 2048 -validity 10000 \
-                -storepass sonicam123 -keypass sonicam123 \
-                -dname "CN=SonicAM,OU=Mobile,O=SonicAM,C=US"
-            fi
+          cp app/build/outputs/apk/output/SonicAM-Release.apk \
+             app/build/outputs/apk/output/SonicAM.apk
 
-            ./gradlew assembleRelease --stacktrace --no-daemon
+          # VERIFY the JS bundle is physically inside the signed APK
+          echo "=== Checking JS bundle is inside Release APK ==="
+          unzip -l app/build/outputs/apk/output/SonicAM-Release.apk | grep "index.android.bundle" \
+            || { echo "FATAL: JS bundle missing from Release APK!"; exit 1; }
 
-            ZIPALIGN=$(find $ANDROID_HOME/build-tools -name zipalign | sort -V | tail -n1)
-            APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n1)
-            RELEASE_DIR="app/build/outputs/apk/release"
+          $APKSIGNER verify --verbose app/build/outputs/apk/output/SonicAM-Release.apk
+          echo "✅ Release APK OK: $(stat -c%s app/build/outputs/apk/output/SonicAM-Release.apk) bytes"
 
-            # Pick whichever output file Gradle produced
-            if   [ -f "$RELEASE_DIR/app-release-unsigned.apk" ]; then
-              SOURCE="$RELEASE_DIR/app-release-unsigned.apk"
-            elif [ -f "$RELEASE_DIR/app-release.apk" ]; then
-              SOURCE="$RELEASE_DIR/app-release.apk"
-            else
-              echo "FATAL: no release APK found in $RELEASE_DIR"
-              ls -lah "$RELEASE_DIR" || true
-              exit 1
-            fi
-
-            $ZIPALIGN -p -f 4 "$SOURCE" app/build/outputs/apk/output/aligned.apk
-            $APKSIGNER sign \
-              --ks "$KEYSTORE" --ks-alias sonicam --ks-pass pass:sonicam123 \
-              --out app/build/outputs/apk/output/SonicAM-Release.apk \
-              app/build/outputs/apk/output/aligned.apk
-
-            $APKSIGNER verify --verbose app/build/outputs/apk/output/SonicAM-Release.apk
-
-            echo "=== Verifying JS bundle is INSIDE the Release APK ==="
-            unzip -l app/build/outputs/apk/output/SonicAM-Release.apk \
-              | grep "index.android.bundle" \
-              || { echo "FATAL: bundle missing from Release APK!"; exit 1; }
-
-            cp app/build/outputs/apk/output/SonicAM-Release.apk \
-               app/build/outputs/apk/output/SonicAM.apk
-            echo "Release APK OK: $(stat -c%s app/build/outputs/apk/output/SonicAM-Release.apk) bytes"
-          fi
-
-          echo "=== Final APK list ==="
-          ls -lh app/build/outputs/apk/output/
+      - name: 📋 List All Built APKs
+        working-directory: ./mobile/android
+        run: ls -lh app/build/outputs/apk/output/ || true
 
       - name: 📤 Upload APK Artifacts
         uses: actions/upload-artifact@v4
@@ -195,23 +183,21 @@ jobs:
         if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         with:
           tag_name: v1.2.5
-          name: "SonicAM v1.2.5 — Standalone Android APK (No Dev Server Required)"
+          name: "SonicAM v1.2.5 — Standalone Android APK (Works Without Dev Server)"
           make_latest: true
           body: |
             ## ☕ SonicAM v1.2.5 — Universal Android APK
 
-            **✅ Fixed**: APK now runs completely standalone — no Metro dev server, no "Could not connect to development server" error.
-
-            The JS bundle (`index.android.bundle`) is fully embedded inside the APK using `expo export:embed`.
+            **✅ Fully standalone** — opens directly, no "Could not connect to development server" error.
 
             | File | Description |
             |---|---|
-            | **SonicAM-Debug.apk** | ⬅️ **Install this one** — zero Play Protect warnings, opens immediately |
-            | **SonicAM-Release.apk / SonicAM.apk** | Signed production build |
+            | **[SonicAM-Debug.apk](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases/latest/download/SonicAM-Debug.apk)** | ⬅️ **Best for direct install** — zero Play Protect warnings |
+            | **[SonicAM-Release.apk](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases/latest/download/SonicAM-Release.apk)** | Signed production build |
 
             **Compatibility**: Android 7.0+ · ARM64 · ARMv7 · x86_64
 
-            > **Install tip**: Uninstall old version first, then tap the downloaded APK from your Files app.
+            > Uninstall old version first → tap downloaded APK from Files app → Install → Open ✅
           files: mobile/android/app/build/outputs/apk/output/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
