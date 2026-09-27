@@ -246,50 +246,117 @@ class MediaProcessor:
     @classmethod
     async def resolve_youtube_fallback(cls, clean_url: str) -> Optional[Dict[str, Any]]:
         """
-        Emergency fallback for YouTube when direct audio downloading is restricted:
-        1. Queries YouTube's official, unauthenticated oEmbed API for verified video title & uploader.
-        2. Searches Apple/iTunes Music API with sanitized song keywords.
-        3. If song matches, downloads high-speed 30s official AAC preview stream into WAV for acoustic recognition.
+        Emergency fallback for YouTube videos & Shorts:
+        1. Inspects the YouTube video page directly for verified Content ID music metadata
+           (e.g. Song: 'Love Story', Artist: 'Indila', Album: 'Mini World').
+        2. If found or if falling back to oEmbed title, queries Apple/iTunes catalog with sanitized song keywords.
+        3. If song matches, downloads high-speed 20s official AAC preview stream into WAV for acoustic recognition.
         4. If audio preview cannot be fingerprinted, returns rich catalog metadata directly.
         """
         loop = asyncio.get_running_loop()
 
-        def _fetch_oembed():
+        def _fetch_page_and_oembed():
+            music_info = None
+            raw_title = ""
+            author = ""
+            thumbnail = ""
+            
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9"
+            }
+            # 1. Fetch YouTube HTML page to extract official Content ID song tags
+            try:
+                watch_url = clean_url
+                if "/shorts/" in clean_url:
+                    vid_id = clean_url.split("/shorts/")[-1].split("?")[0]
+                    watch_url = f"https://www.youtube.com/watch?v={vid_id}"
+                req = urllib.request.Request(watch_url, headers=headers)
+                with urllib.request.urlopen(req, timeout=6) as resp:
+                    html = resp.read().decode('utf-8', errors='replace')
+                    
+                    # Pattern 1: VIDEO_ATTRIBUTE_IMAGE_STYLE_SQUARE
+                    m_attr = re.search(r'"imageStyle":"VIDEO_ATTRIBUTE_IMAGE_STYLE_SQUARE","title":"(.*?)","subtitle":"(.*?)"(?:,"secondarySubtitle":\{"content":"(.*?)"\})?', html)
+                    if m_attr:
+                        music_info = {
+                            "title": m_attr.group(1).strip(),
+                            "artist": m_attr.group(2).strip(),
+                            "album": m_attr.group(3).strip() if m_attr.group(3) else None
+                        }
+                    
+                    # Pattern 2: dialogMessages runs
+                    if not music_info:
+                        m_runs = re.search(r'"dialogMessages":\[\{"runs":(\[.*?\])\}\]', html)
+                        if m_runs:
+                            try:
+                                runs = json.loads(m_runs.group(1))
+                                song = None
+                                artist = None
+                                album = None
+                                current_key = None
+                                for r in runs:
+                                    txt = r.get("text", "").strip().rstrip(":")
+                                    if txt in ["Song", "Artist", "Album", "Licensed to YouTube by", "Writers"]:
+                                        current_key = txt
+                                    elif current_key and txt and txt != ":":
+                                        if current_key == "Song" and not song:
+                                            song = txt
+                                        elif current_key == "Artist" and not artist:
+                                            artist = txt
+                                        elif current_key == "Album" and not album:
+                                            album = txt
+                                        current_key = None
+                                if song:
+                                    music_info = {"title": song, "artist": artist, "album": album}
+                            except Exception:
+                                pass
+            except Exception as e:
+                logger.warning(f"YouTube HTML inspection note: {e}")
+
+            # 2. oEmbed for video title and thumbnail fallback
             try:
                 oembed_url = f"https://www.youtube.com/oembed?url={urllib.parse.quote(clean_url)}&format=json"
-                req = urllib.request.Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
-                with urllib.request.urlopen(req, timeout=6) as resp:
-                    return json.loads(resp.read().decode())
+                req_oe = urllib.request.Request(oembed_url, headers=headers)
+                with urllib.request.urlopen(req_oe, timeout=5) as resp:
+                    oe_data = json.loads(resp.read().decode())
+                    raw_title = oe_data.get("title", "")
+                    author = oe_data.get("author_name", "")
+                    thumbnail = oe_data.get("thumbnail_url", "")
             except Exception as e:
                 logger.warning(f"YouTube oEmbed lookup failed: {e}")
-                return None
 
-        oembed = await loop.run_in_executor(None, _fetch_oembed)
-        if not oembed:
+            return music_info, raw_title, author, thumbnail
+
+        music_info, raw_title, author, thumbnail = await loop.run_in_executor(None, _fetch_page_and_oembed)
+        if not music_info and not raw_title:
             return None
 
-        raw_title = oembed.get("title", "")
-        author = oembed.get("author_name", "")
-        thumbnail = oembed.get("thumbnail_url", "")
+        # Determine search keywords
+        clean_title = ""
+        if music_info:
+            clean_title = music_info["title"]
+            if music_info.get("artist"):
+                author = music_info["artist"]
+        else:
+            # Clean video title: remove hashtags, emojis, brackets
+            clean_title = re.sub(r'#\w+', '', raw_title)
+            clean_title = re.sub(r'[\(\[\{].*?[\)\]\}]', '', clean_title)
+            for noise in ["Official Music Video", "Official Video", "Official Audio", "Lyrics", "Lyric Video", "4K Remaster", "Shorts", "Short", "Video"]:
+                clean_title = re.sub(re.escape(noise), '', clean_title, flags=re.IGNORECASE)
+            clean_title = clean_title.strip()
 
-        # Clean title for song search: strip [Official Video], (Remastered 2020), etc.
-        clean_title = re.sub(r'[\(\[\{].*?[\)\]\}]', '', raw_title)
-        for noise in ["Official Music Video", "Official Video", "Official Audio", "Lyrics", "Lyric Video", "4K Remaster"]:
-            clean_title = re.sub(re.escape(noise), '', clean_title, flags=re.IGNORECASE)
-        clean_title = clean_title.strip()
-
-        # Query iTunes Search API with multi-stage candidate matching
+        # Query iTunes Search API with prioritized candidate queries
         def _search_itunes():
             candidates = []
-            if author and author.lower() not in clean_title.lower():
-                candidates.append(f"{clean_title} {author}".strip())
-            candidates.append(clean_title.strip())
-            parts = re.split(r'\s*[-—:|]\s*', raw_title)
-            if len(parts) >= 2:
-                p0 = re.sub(r'\[.*?\]|\(.*?\)', '', parts[0]).strip()
-                p1 = re.sub(r'\[.*?\]|\(.*?\)', '', parts[1]).strip()
-                candidates.append(f"{p0} {p1}".strip())
-                candidates.append(f"{p1} {p0}".strip())
+            if music_info:
+                if music_info.get("artist"):
+                    candidates.append(f"{music_info['title']} {music_info['artist']}")
+                candidates.append(music_info["title"])
+            
+            if clean_title:
+                if author and author.lower() not in clean_title.lower() and not re.search(r'world|channel|records|production|official', author, re.IGNORECASE):
+                    candidates.append(f"{clean_title} {author}".strip())
+                candidates.append(clean_title.strip())
 
             for q in candidates:
                 if not q or len(q) < 2:
@@ -311,21 +378,25 @@ class MediaProcessor:
             item = itunes_data["results"][0]
             track_name = item.get("trackName", clean_title)
             artist_name = item.get("artistName", author)
-            album_name = item.get("collectionName", "") or "Single Release"
+            album_name = item.get("collectionName", "") or (music_info.get("album") if music_info else "Single Release")
             genre_name = item.get("primaryGenreName", "Music")
             release_date = (item.get("releaseDate") or "")[:4]
             preview_url = item.get("previewUrl")
             cover_art = (item.get("artworkUrl100") or "").replace("100x100bb", "600x600bb") or thumbnail
             apple_music = item.get("trackViewUrl")
-        else:
-            track_name = clean_title or raw_title
-            artist_name = author or "Music Artist"
-            album_name = "Single Release"
+        elif music_info:
+            track_name = music_info["title"]
+            artist_name = music_info.get("artist") or "Music Artist"
+            album_name = music_info.get("album") or "Single Release"
             genre_name = "Music"
             release_date = None
             preview_url = None
             cover_art = thumbnail
             apple_music = None
+        else:
+            # If iTunes found no song and no music metadata exists in the video,
+            # don't falsely return the YouTube video title as a song!
+            return None
 
         search_q = urllib.parse.quote(f"{track_name} {artist_name}")
         if not apple_music:
@@ -351,15 +422,15 @@ class MediaProcessor:
             }
         }
 
-        # If preview_url is available, download and slice 30s preview so Shazam can do acoustic landmark recognition!
+        # If preview_url is available, download and slice 20s preview so Shazam can do acoustic landmark recognition!
         if preview_url:
             try:
-                preview_wav = await cls.extract_audio_from_stream(preview_url, start_time=0, duration=30)
+                preview_wav = await cls.extract_audio_from_stream(preview_url, start_time=0, duration=20)
                 if preview_wav.exists() and preview_wav.stat().st_size > 0:
                     return {
                         "wav_path": preview_wav,
                         "source_info": {
-                            "source_title": raw_title,
+                            "source_title": raw_title or track_name,
                             "source_uploader": author,
                             "source_thumbnail": cover_art,
                             "webpage_url": clean_url,
@@ -376,7 +447,7 @@ class MediaProcessor:
                 "matched": True,
                 "song": song_dict,
                 "source_info": {
-                    "source_title": raw_title,
+                    "source_title": raw_title or track_name,
                     "source_uploader": author,
                     "source_thumbnail": cover_art,
                     "webpage_url": clean_url
@@ -388,11 +459,13 @@ class MediaProcessor:
     async def extract_audio_from_url(
         cls,
         url: str,
-        duration: int = 45
+        start_time: int = 0,
+        duration: int = 20
     ) -> Tuple[Path, Dict[str, Any]]:
         """
         Extract an audio snippet from any web URL (YouTube, YouTube Shorts, SoundCloud, direct MP4, etc.)
         using a resilient multi-tier pipeline (yt-dlp with quickjs + FFmpeg direct stream fallback).
+        Defaults to extracting the first 20 seconds for ultra-fast, high-precision acoustic matching.
         """
         clean_url, is_direct, platform_hint = cls.normalize_video_url(url)
         logger.info(f"Normalized URL: {clean_url} (direct: {is_direct}, platform: {platform_hint})")
@@ -400,7 +473,7 @@ class MediaProcessor:
         # Tier 0: Direct Media URL (MP4, WEBM, MOV, MP3, etc.)
         if is_direct:
             try:
-                wav_path = await cls.extract_audio_from_stream(clean_url, start_time=0, duration=duration)
+                wav_path = await cls.extract_audio_from_stream(clean_url, start_time=start_time, duration=duration)
                 extracted_info = {
                     "source_title": clean_url.split('/')[-1].split('?')[0],
                     "webpage_url": clean_url
@@ -416,7 +489,7 @@ class MediaProcessor:
             'format': 'ba/b/bestaudio/best',
             'outtmpl': outtmpl,
             'ffmpeg_location': FFMPEG_PATH,
-            'download_ranges': yt_dlp.utils.download_range_func(None, [(0, duration)]),
+            'download_ranges': yt_dlp.utils.download_range_func(None, [(start_time, start_time + duration)]),
             'playlist_items': '1',
             'noplaylist': True,
             'postprocessors': [{
@@ -487,7 +560,7 @@ class MediaProcessor:
 
         if all_matches:
             best_candidate = sorted(all_matches, key=lambda p: p.stat().st_size, reverse=True)[0]
-            converted_wav = await cls.extract_audio_from_file(best_candidate, 0, duration)
+            converted_wav = await cls.extract_audio_from_file(best_candidate, start_time, duration)
             for f in all_matches:
                 if f != converted_wav:
                     cls.cleanup_file(f)
@@ -544,7 +617,7 @@ class MediaProcessor:
 
                 if stream_url:
                     stream_wav = await cls.extract_audio_from_stream(
-                        stream_url, 0, duration, headers=stream_headers
+                        stream_url, start_time, duration, headers=stream_headers
                     )
                     if stream_wav.exists() and stream_wav.stat().st_size > 0:
                         logger.info(f"Tier 2 stream demux succeeded: {stream_wav}")

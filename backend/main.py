@@ -77,42 +77,70 @@ async def recognize_url(payload: UrlRecognizeRequest):
     logger.info(f"Received URL recognition request: {url}")
     wav_path = None
     try:
-        wav_path, source_info = await MediaProcessor.extract_audio_from_url(url, duration=45)
+        # Step 1: Open link and extract the first 20 seconds of audio in background
+        logger.info(f"Background process: Extracting first 20 seconds of audio from: {url}")
+        wav_path, source_info = await MediaProcessor.extract_audio_from_url(url, start_time=0, duration=20)
         if wav_path is None and source_info and source_info.get("direct_result"):
             return source_info["resolved_song"]
 
+        # Step 2: Analyze that audio (first 20 seconds)
+        logger.info(f"Background process: Analyzing first 20s audio from: {url}")
         result = await recognizer.recognize_audio_file(wav_path, source_info=source_info)
-        if not result.get("matched"):
-            if source_info and "fallback_song" in source_info:
-                return {
-                    "success": True,
-                    "matched": True,
-                    "song": source_info["fallback_song"],
-                    "source_info": source_info
-                }
-            # If the video had an intro/dialogue and Shazam missed it, resolve via YouTube metadata
-            if source_info and source_info.get("source_title"):
-                fallback_res = await MediaProcessor.resolve_youtube_fallback(url)
-                if fallback_res:
-                    if fallback_res.get("wav_path"):
-                        prev_res = await recognizer.recognize_audio_file(fallback_res["wav_path"], source_info=fallback_res.get("source_info"))
-                        MediaProcessor.cleanup_file(fallback_res["wav_path"])
-                        if prev_res.get("matched"):
-                            return prev_res
-                    if fallback_res.get("direct_result") and fallback_res.get("resolved_song", {}).get("matched"):
-                        return fallback_res["resolved_song"]
-                    if fallback_res.get("source_info", {}).get("fallback_song"):
-                        return {
-                            "success": True,
-                            "matched": True,
-                            "song": fallback_res["source_info"]["fallback_song"],
-                            "source_info": fallback_res["source_info"]
-                        }
+        
+        # Step 3: If it matches, directly give output of that result!
+        if result.get("matched"):
+            logger.info(f"Direct match found in first 20s: {result.get('song', {}).get('title')} by {result.get('song', {}).get('artist')}")
+            return result
 
-            # Final attempt: resolve directly from source_info metadata
-            resolved = await recognizer.resolve_song_from_metadata(source_info or result.get("source_info"))
-            if resolved and resolved.get("matched"):
-                return resolved
+        # Step 4: If not matched in first 20s (e.g. video intro monologue/sound effects before music starts):
+        if source_info and "fallback_song" in source_info:
+            return {
+                "success": True,
+                "matched": True,
+                "song": source_info["fallback_song"],
+                "source_info": source_info
+            }
+
+        # Check secondary 20s window (20s to 40s) in background if music began after intro
+        wav_path_sec = None
+        try:
+            logger.info("First 20s did not match acoustic catalog; checking 20s-40s audio window in background...")
+            wav_path_sec, _ = await MediaProcessor.extract_audio_from_url(url, start_time=20, duration=20)
+            if wav_path_sec and wav_path_sec.exists():
+                sec_res = await recognizer.recognize_audio_file(wav_path_sec, source_info=source_info)
+                if sec_res.get("matched"):
+                    logger.info(f"Direct match found in secondary 20s window: {sec_res.get('song', {}).get('title')}")
+                    return sec_res
+        except Exception as e:
+            logger.debug(f"Secondary 20s window analysis note: {e}")
+        finally:
+            if wav_path_sec:
+                MediaProcessor.cleanup_file(wav_path_sec)
+
+        # If acoustic match still not found, resolve via video title/metadata fallback
+        if source_info and source_info.get("source_title"):
+            fallback_res = await MediaProcessor.resolve_youtube_fallback(url)
+            if fallback_res:
+                if fallback_res.get("wav_path"):
+                    prev_res = await recognizer.recognize_audio_file(fallback_res["wav_path"], source_info=fallback_res.get("source_info"))
+                    MediaProcessor.cleanup_file(fallback_res["wav_path"])
+                    if prev_res.get("matched"):
+                        return prev_res
+                if fallback_res.get("direct_result") and fallback_res.get("resolved_song", {}).get("matched"):
+                    return fallback_res["resolved_song"]
+                if fallback_res.get("source_info", {}).get("fallback_song"):
+                    return {
+                        "success": True,
+                        "matched": True,
+                        "song": fallback_res["source_info"]["fallback_song"],
+                        "source_info": fallback_res["source_info"]
+                    }
+
+        # Final attempt: resolve directly from source_info metadata
+        resolved = await recognizer.resolve_song_from_metadata(source_info or result.get("source_info"))
+        if resolved and resolved.get("matched"):
+            return resolved
+
         return result
     except HTTPException:
         raise

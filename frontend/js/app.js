@@ -3,14 +3,21 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // API URL resolver for local web, file:// protocol, and standalone mobile app
-  function getApiUrl(endpoint) {
-    let base = window.SONICAM_BACKEND_URL || '';
-    if (!base && (window.location.protocol === 'file:' || !window.location.origin || window.location.origin === 'null')) {
-      base = 'https://anything-to-audio-am.vercel.app';
+  // 24/7 Global Cloud Recognition Engine (Hugging Face Spaces)
+  const HF_BACKEND_URL = 'https://mohammed-ashraf-shaik-sonicam.hf.space';
+  const VERCEL_BACKEND_URL = 'https://anything-to-audio-am.vercel.app';
+
+  // API URL resolver for web, file:// protocol, and standalone mobile app
+  let activeBackend = window.SONICAM_BACKEND_URL || '';
+  if (!activeBackend) {
+    if (window.location.protocol === 'file:' || !window.location.origin || window.location.origin === 'null' || window.location.hostname !== 'localhost') {
+      activeBackend = HF_BACKEND_URL;
     }
-    if (base) {
-      return base.replace(/\/+$/, '') + endpoint;
+  }
+
+  function getApiUrl(endpoint) {
+    if (activeBackend) {
+      return activeBackend.replace(/\/+$/, '') + endpoint;
     }
     return endpoint;
   }
@@ -268,11 +275,11 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
-    startPipeline("Connecting to media stream...");
-    advancePipelineStep(0);
+    startPipeline("Opening link & analyzing audio in background...");
+    advancePipelineStep(0, "Opening media link...");
 
     try {
-      advancePipelineStep(1, "Demuxing and slicing audio stream...");
+      advancePipelineStep(1, "Analyzing first 20 seconds of audio...");
       
       const response = await fetch(getApiUrl('/api/recognize/url'), {
         method: 'POST',
@@ -280,7 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({ url })
       });
 
-      advancePipelineStep(2, "Generating acoustic landmark fingerprints...");
+      advancePipelineStep(2, "Matching acoustic landmark fingerprints...");
       
       if (!response.ok) {
         // If server extraction failed, try resolving via title/keywords before failing
@@ -294,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(errData.detail || `Server returned status ${response.status} while analyzing link.`);
       }
 
-      advancePipelineStep(3, "Resolving song metadata from global catalog...");
+      advancePipelineStep(3, "Delivering song result...");
       const data = await response.json();
       
       stopPipeline();

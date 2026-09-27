@@ -15,9 +15,9 @@ logger = logging.getLogger("SonicAM.Config")
 BASE_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = BASE_DIR / "frontend"
 
-# Use writable /tmp directory on Vercel / serverless platforms
+# Use writable /tmp directory on Vercel, Hugging Face Spaces, and serverless platforms
 import tempfile
-if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or os.environ.get("SPACE_ID"):
     TEMP_DIR = Path(tempfile.gettempdir()) / "sonic_temp"
 else:
     TEMP_DIR = BASE_DIR / "temp_media"

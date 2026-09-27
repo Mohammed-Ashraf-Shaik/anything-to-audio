@@ -1,3 +1,13 @@
+---
+title: SonicAM Universal Audio Recognition Engine
+emoji: ☕
+colorFrom: yellow
+colorTo: amber
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # ☕ SonicAM — Anything to Audio & Universal Song Recognition Engine (v1.2.2)
 
 <div align="center">
