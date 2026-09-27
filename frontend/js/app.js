@@ -3,17 +3,21 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 24/7 Global Cloud Recognition Engine (Hugging Face Spaces)
+  // 24/7 Global Cloud Recognition Engines (Hugging Face Spaces + Vercel Cloud)
   const HF_BACKEND_URL = 'https://mohammed-ashraf-shaik-sonicam.hf.space';
   const VERCEL_BACKEND_URL = 'https://anything-to-audio-am.vercel.app';
 
-  // API URL resolver for web, file:// protocol, and standalone mobile app
-  let activeBackend = window.SONICAM_BACKEND_URL || '';
-  if (!activeBackend) {
-    if (window.location.protocol === 'file:' || !window.location.origin || window.location.origin === 'null' || window.location.hostname !== 'localhost') {
-      activeBackend = HF_BACKEND_URL;
-    }
-  }
+  // Default to live 24/7 cloud backend; auto-upgrades to Hugging Face Space when ready
+  let activeBackend = window.SONICAM_BACKEND_URL || VERCEL_BACKEND_URL;
+
+  // Seamlessly ping Hugging Face Space; if active, prioritize HF
+  fetch(`${HF_BACKEND_URL}/api/health`, { method: 'GET', signal: AbortSignal.timeout(1500) })
+    .then(res => {
+      if (res.ok) {
+        activeBackend = HF_BACKEND_URL;
+      }
+    })
+    .catch(() => {});
 
   function getApiUrl(endpoint) {
     if (activeBackend) {
