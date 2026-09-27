@@ -28,4 +28,5 @@ temp_media/
 .DS_Store
 Thumbs.db
 .vscode/
+scratch/
 .idea/

@@ -20,37 +20,38 @@ export default function App() {
   const webViewRef = useRef(null);
   const [canGoBack, setCanGoBack] = useState(false);
 
-  // Request Microphone and Media permissions on Android app startup
+  // Request Microphone and Media permissions on Android app startup safely
   useEffect(() => {
     async function requestAndroidPermissions() {
       if (Platform.OS !== 'android') return;
       try {
-        const permissions = [
-          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-          PermissionsAndroid.PERMISSIONS.MODIFY_AUDIO_SETTINGS,
-        ];
-
-        // Android 13+ (API 33+) granular media permissions
+        const toCheck = [];
+        if (PermissionsAndroid.PERMISSIONS && PermissionsAndroid.PERMISSIONS.RECORD_AUDIO) {
+          toCheck.push(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+        }
         if (Platform.Version >= 33) {
-          if (PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO) {
-            permissions.push(PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO);
-          }
-          if (PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO) {
-            permissions.push(PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO);
+          if (PermissionsAndroid.PERMISSIONS && PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO) {
+            toCheck.push(PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO);
           }
         } else {
-          if (PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE) {
-            permissions.push(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
+          if (PermissionsAndroid.PERMISSIONS && PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE) {
+            toCheck.push(PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE);
           }
         }
-
-        await PermissionsAndroid.requestMultiple(permissions);
+        const valid = toCheck.filter(p => typeof p === 'string' && p.length > 0);
+        if (valid.length > 0) {
+          await PermissionsAndroid.requestMultiple(valid);
+        }
       } catch (err) {
-        console.warn('Android permissions request error:', err);
+        console.warn('Android permissions request notice:', err);
       }
     }
 
-    requestAndroidPermissions();
+    // Delay slightly so the React Native UI mounts smoothly first without blocking startup
+    const timer = setTimeout(() => {
+      requestAndroidPermissions();
+    }, 600);
+    return () => clearTimeout(timer);
   }, []);
 
   // Handle messages from WebView (e.g. explicit microphone re-request)
@@ -207,7 +208,11 @@ export default function App() {
             allowFileAccess={true}
             allowFileAccessFromFileURLs={true}
             allowUniversalAccessFromFileURLs={true}
-            userAgent="SonicAMMobile/1.2.1"
+            mixedContentMode="always"
+            textZoom={100}
+            setSupportMultipleWindows={false}
+            javaScriptCanOpenWindowsAutomatically={true}
+            userAgent="SonicAMMobile/1.2.4"
             domStorageEnabled={true}
             javaScriptEnabled={true}
             androidHardwareAccelerationDisabled={false}
@@ -216,6 +221,12 @@ export default function App() {
               setCanGoBack(navState.canGoBack);
             }}
             onShouldStartLoadWithRequest={handleShouldStartLoad}
+            onError={(syntheticEvent) => {
+              console.warn('WebView error event:', syntheticEvent.nativeEvent);
+            }}
+            onHttpError={(syntheticEvent) => {
+              console.warn('WebView HTTP error:', syntheticEvent.nativeEvent.statusCode);
+            }}
           />
         </View>
       </SafeAreaView>

@@ -53,7 +53,7 @@ mobile_footer = """
     <span class="pulse-dot"></span>
     <span>SonicAM Mobile Pro</span>
   </div>
-  <p class="mobile-version-tag">Professional Neural Audio Recognition Engine • v1.2.3</p>
+  <p class="mobile-version-tag">Professional Neural Audio Recognition Engine • v1.2.4</p>
 </div>
 """
 html = html.replace('<footer class="app-footer">', f'<footer class="app-footer">\n{mobile_footer}')
