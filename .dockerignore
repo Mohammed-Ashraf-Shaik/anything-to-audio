@@ -8,4 +8,5 @@ temp_media
 mobile/node_modules
 mobile/android
 mobile/ios
+*.wav
 .DS_Store
