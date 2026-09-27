@@ -41,7 +41,8 @@ html = html.replace('src="assets/icon.png"', f'src="{icon_data_uri}"')
 # 3. Surgically remove all 'Download APK', GitHub, and HuggingFace elements from mobile APK
 html = re.sub(r'<div class="hero-apk-badge-wrapper">.*?</div>\s*', '', html, flags=re.DOTALL)
 html = re.sub(r'<a\s+[^>]*id="btnDirectDownloadApk"[^>]*>.*?</a>\s*', '', html, flags=re.DOTALL)
-html = re.sub(r'<a\s+[^>]*href="[^"]*SonicAM\.apk"[^>]*>.*?</a>\s*', '', html, flags=re.DOTALL)
+html = re.sub(r'<a\s+[^>]*href="[^"]*SonicAM[^"]*\.apk"[^>]*>.*?</a>\s*', '', html, flags=re.DOTALL)
+html = re.sub(r'<a\s+[^>]*href="[^"]*\.apk"[^>]*>.*?</a>\s*', '', html, flags=re.DOTALL)
 html = re.sub(r'<a\s+[^>]*href="[^"]*github\.com[^"]*"[^>]*>.*?</a>\s*', '', html, flags=re.DOTALL)
 html = re.sub(r'<a\s+[^>]*href="[^"]*huggingface\.co[^"]*"[^>]*>.*?</a>\s*', '', html, flags=re.DOTALL)
 html = re.sub(r'<div class="footer-links">.*?</div>\s*', '', html, flags=re.DOTALL)
@@ -71,8 +72,10 @@ mobile_css = """
 #btnDirectDownloadApk,
 .hero-apk-badge-wrapper,
 .hero-apk-badge,
-a[href*="SonicAM.apk"],
-.footer-link[href*="SonicAM.apk"],
+a[href*="SonicAM"],
+a[href*=".apk"],
+.footer-link[href*="SonicAM"],
+.footer-link[href*=".apk"],
 a[href*="github.com"],
 a[href*="huggingface.co"],
 .footer-links,
@@ -107,7 +110,7 @@ function getApiUrl(endpoint) {
 (function() {
     function purgeWebBadges() {
         if (document.body) document.body.classList.add('is-mobile-app');
-        var bad = document.querySelectorAll('#btnDirectDownloadApk, .hero-apk-badge-wrapper, .hero-apk-badge, a[href*="SonicAM.apk"], a[href*="github.com"], a[href*="huggingface.co"], .footer-links, .dev-link');
+        var bad = document.querySelectorAll('#btnDirectDownloadApk, .hero-apk-badge-wrapper, .hero-apk-badge, a[href*="SonicAM"], a[href*=".apk"], a[href*="github.com"], a[href*="huggingface.co"], .footer-links, .dev-link');
         bad.forEach(function(el) {
             if (el && el.parentNode) el.parentNode.removeChild(el);
         });

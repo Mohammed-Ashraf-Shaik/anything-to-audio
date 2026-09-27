@@ -20,7 +20,7 @@ logger = logging.getLogger("SonicAM.Server")
 app = FastAPI(
     title="SonicAM - Advanced Audio & Music Recognition Engine",
     description="Detect and extract song names, artist details, album art, lyrics, and streaming links from links, videos, audio, and live microphone.",
-    version="1.2.3"
+    version="1.2.5"
 )
 
 # Enable CORS for cross-origin integration
@@ -42,7 +42,7 @@ async def health_check():
     """System health check and diagnostic endpoint."""
     return {
         "status": "healthy",
-        "version": "1.2.3",
+        "version": "1.2.5",
         "service": "SonicAM Recognition Engine",
         "ffmpeg_configured": FFMPEG_PATH is not None,
         "ffmpeg_path": FFMPEG_PATH,

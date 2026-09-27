@@ -8,28 +8,27 @@ app_port: 8000
 pinned: false
 ---
 
-# ☕ SonicAM — Anything to Audio & Universal Song Recognition Engine (v1.2.5)
+# ☕ SonicAM — Universal Audio & Song Recognition Engine (v1.2.5)
 
 <div align="center">
 
-[![Release APK](https://img.shields.io/badge/⬇️%20RELEASE%20APK-SonicAM%20v1.2.5%20(Universal)-e5a950?style=for-the-badge&logo=android&logoColor=black)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases/latest/download/SonicAM.apk)
-[![Debug APK (Recommended)](https://img.shields.io/badge/⬇️%20DEBUG%20APK-SonicAM%20v1.2.5%20(Zero%20Warnings)-22c55e?style=for-the-badge&logo=android&logoColor=black)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases/latest/download/SonicAM-Debug.apk)
+[![Release APK (Universal)](https://img.shields.io/badge/⬇️%20RELEASE%20APK-SonicAM%20v1.2.5%20(Universal)-e5a950?style=for-the-badge&logo=android&logoColor=black)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases/latest/download/SonicAM.apk)
+[![Debug APK (Standalone)](https://img.shields.io/badge/⬇️%20DEBUG%20APK-SonicAM%20v1.2.5%20(Zero%20Warnings)-22c55e?style=for-the-badge&logo=android&logoColor=black)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases/latest/download/SonicAM-Debug.apk)
 [![Live Web Engine (Vercel)](https://img.shields.io/badge/🌐%20LIVE%20WEBSITE-SonicAM%20Cloud%20Engine-009688?style=for-the-badge&logo=vercel&logoColor=white)](https://anything-to-audio-am.vercel.app/)
 [![Hugging Face Space](https://img.shields.io/badge/🤗%20Hugging%20Face-SonicAM%20Space-FFD21E?style=for-the-badge&logo=huggingface&logoColor=black)](https://huggingface.co/spaces/Mohammed-Ashraf-Shaik/SONICAM)
-[![All Androids & Tabs](https://img.shields.io/badge/Compatibility-All%20Android%20Phones%20%26%20Tablets%20(7.0%20to%2015+)-d97706?style=for-the-badge&logo=googleplay&logoColor=white)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases)
-[![GitHub Actions CI Artifacts](https://img.shields.io/badge/📦%20GitHub%20Actions-Latest%20APK%20Build-8c4a22?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/actions/workflows/build-apk.yml)
+[![Compatibility](https://img.shields.io/badge/Compatibility-All%20Android%20Phones%20%26%20Tablets%20(7.0%20to%2015+)-d97706?style=for-the-badge&logo=googleplay&logoColor=white)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/releases)
+[![GitHub Actions CI](https://img.shields.io/badge/📦%20GitHub%20Actions-Latest%20APK%20Build-8c4a22?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Mohammed-Ashraf-Shaik/anything-to-audio/actions/workflows/build-apk.yml)
 
-> 🚀 **Universal APK v1.2.5 (Phones + Tablets)**: Works natively across all existing Android phones, phablets, foldables, and tablets (`Android 7.0 Nougat` to `Android 15+`). Universal CPU support (`arm64-v8a`, `armeabi-v7a`, `x86_64`) — 100% free direct installation with no Google Play Store account required.
-> **Tip**: Install `SonicAM-Debug.apk` for zero Google Play Protect warnings and instant launch.
+> 🚀 **Universal APK v1.2.5 (Phones + Tablets)**: Works natively across all existing Android smartphones, phablets, foldables, and tablets (`Android 7.0 Nougat` to `Android 15+`). Features universal CPU binary support (`arm64-v8a`, `armeabi-v7a`, `x86_64`) — 100% free direct installation with no Google Play Store account required. Pre-bundled standalone build: opens immediately with zero Metro development server errors.
 
 </div>
 
 ---
 
-> **Extract, detect, and identify any song in seconds from social media links, video containers, raw audio tracks, or live ambient microphone — styled in a luxurious roasted coffee, mocha & warm caramel aesthetic.**
+> **Extract, detect, and identify any song in seconds from social media links, video containers, raw audio tracks, or live ambient microphone — styled in an ultra-premium roasted coffee, mocha & warm caramel aesthetic.**
 
 ![Version 1.2.5](https://img.shields.io/badge/Release-v1.2.5-brightgreen?style=for-the-badge)
-![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Python 3.11+](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![Shazam Landmark](https://img.shields.io/badge/Shazam-Acoustic%20AI-0088ff?style=for-the-badge&logo=apple&logoColor=white)
 ![yt-dlp](https://img.shields.io/badge/yt--dlp-Universal%20Extractor-red?style=for-the-badge)
@@ -51,10 +50,11 @@ Whether you have an **Instagram Reel, YouTube Short, TikTok clip, Twitter/X vide
 
 ### 1. 🔗 Universal Social Link Detective (`yt-dlp`)
 - Paste URLs directly from **YouTube, YouTube Shorts, TikTok, Instagram Reels, Twitter/X, SoundCloud, Facebook Watch, Vimeo**, or direct MP4/MP3 media streams.
-- **Smart Stream Slicing**: Slices only the initial 30–45s of audio on the fly directly from the remote media stream — no multi-gigabyte video file downloads required.
+- **Direct Song Search**: If you type a song name or lyrics query directly into the input bar instead of a link, SonicAM automatically resolves and matches the track against the global catalog.
+- **Smart Stream Slicing**: Slices only the initial 30–45s of audio on the fly directly from remote media streams — no multi-gigabyte video downloads required.
 
 ### 2. 📁 Multi-Container Drag & Drop (`FFmpeg 7.1`)
-- Drop any video container (`MP4`, `MKV`, `MOV`, `AVI`, `WEBM`, `FLV`, `3GP`, `WMV`) or audio format (`MP3`, `WAV`, `FLAC`, `M4A`, `OGG`, `AAC`, `OPUS`).
+- Drag and drop any video container (`MP4`, `MKV`, `MOV`, `AVI`, `WEBM`, `FLV`, `3GP`, `WMV`) or audio file (`MP3`, `WAV`, `FLAC`, `M4A`, `OGG`, `AAC`, `OPUS`).
 - Demuxes the audio stream and normalizes it to pristine **44.1kHz 16-bit stereo PCM WAV** for acoustic analysis.
 
 ### 3. 🎙️ 15-Second Ambient Live Microphone Radar
@@ -76,13 +76,19 @@ Whether you have an **Instagram Reel, YouTube Short, TikTok clip, Twitter/X vide
 ### 5. ☕ Luxurious Roasted Coffee & Caramel Aesthetic
 - Handcrafted with warm espresso, dark mocha, roasted hazelnut, and golden caramel gradients.
 - Includes a live HTML5 Canvas oscilloscope & frequency visualizer responding in real-time.
+- Session History Drawer to store and export recent detections.
 
-### 6. 📱 Native Mobile App (Android & iOS)
-- Built with **React Native (Expo SDK 52)** featuring a hybrid WebView client architecture.
-- Full microphone permissions handling, responsive offline bundle fallback, and gesture-driven UI.
+### 6. 📱 Truly Standalone Mobile App (Android & iOS)
+- Built with **React Native (Expo SDK 52)** with a hybrid WebView client architecture.
+- Bundles complete offline HTML, CSS, and JS assets directly into the APK via `mobile/build_bundle.py`.
+- **Zero Metro Server Dependency**: Pre-bundled with Hermes bytecode and configured with developer support disabled (`getUseDeveloperSupport() = false`) so the APK opens immediately without looking for `localhost:8081`.
 
 ### 7. 🤖 Automated GitHub Actions Android APK Builder
-- Continuous integration pipeline automatically compiles a standalone, universal Android APK on every release tag or workflow dispatch.
+- Continuous integration pipeline automatically compiles universal Android APKs on every release tag or push:
+  - `SonicAM.apk` (Signed Release APK)
+  - `SonicAM-Release.apk` (Signed Release APK)
+  - `SonicAM-Debug.apk` (Standalone Debug APK)
+- Automatically verifies that `index.android.bundle` is physically packaged inside the APK before publishing to GitHub Releases.
 
 ---
 
@@ -92,7 +98,7 @@ Whether you have an **Instagram Reel, YouTube Short, TikTok clip, Twitter/X vide
 graph TD
     subgraph Clients [Clients & Endpoints]
         Web[Web Browser - Desktop & Mobile]
-        App[SonicAM Mobile App - React Native / Expo]
+        App[SonicAM Mobile App - Standalone APK]
         API_Callers[External REST API Callers]
     end
 
@@ -133,29 +139,34 @@ graph TD
 anything-to-audio/
 ├── .github/
 │   └── workflows/
-│       └── build-apk.yml         # GitHub Actions automated Android APK build CI
+│       ├── build-apk.yml         # GitHub Actions automated Android APK builder & release CI
+│       └── sync-hf.yml           # Automated synchronization to Hugging Face Spaces
 ├── backend/
 │   ├── __init__.py
-│   ├── config.py                 # Paths, temp directories, serverless /tmp handlers
-│   ├── main.py                   # FastAPI REST application & endpoints
-│   ├── media_processor.py        # yt-dlp streaming & FFmpeg normalization
-│   └── recognizer.py             # Shazamio acoustic landmark fingerprinting
+│   ├── config.py                 # Paths, temp directories, serverless /tmp handlers & FFmpeg discovery
+│   ├── main.py                   # FastAPI REST application, endpoints & CORS
+│   ├── media_processor.py        # yt-dlp streaming, format validation & FFmpeg normalization
+│   └── recognizer.py             # Shazamio acoustic landmark fingerprinting & search fallback
 ├── frontend/
-│   ├── assets/                   # App logos & branding
+│   ├── assets/                   # App icons, logos & branding
 │   ├── css/
 │   │   └── styles.css            # Roasted coffee, mocha & caramel design system
 │   ├── js/
-│   │   ├── app.js                # Frontend state, API orchestration & UI handlers
-│   │   └── visualizer.js         # HTML5 Canvas oscilloscope & audio visualizer
+│   │   ├── app.js                # Frontend state, API orchestration, audio recording & UI handlers
+│   │   └── visualizer.js         # HTML5 Canvas oscilloscope & frequency visualizer
 │   └── index.html                # Semantic single-page responsive application
 ├── mobile/
-│   ├── assets/                   # App icons, splash screens & adaptive icons
-│   ├── App.js                    # Native React Native WebView container
-│   ├── app.json                  # Expo configuration
+│   ├── assets/                   # App icons, splash screens, adaptive icons & bundled_html.js
+│   ├── App.js                    # Native React Native container with permissions & safe area handling
+│   ├── app.json                  # Expo SDK 52 configuration
+│   ├── build_bundle.py           # Inlines frontend into self-contained JS bundle for offline APK
 │   ├── eas.json                  # EAS build profiles
 │   ├── index.js                  # Entry point for native bundle
-│   └── package.json              # React Native dependencies
-├── pyproject.toml                # Project metadata & Vercel entrypoint
+│   ├── package.json              # React Native dependencies
+│   └── sonicam-release.keystore  # Production signing keystore
+├── Dockerfile                    # Containerization for Hugging Face Spaces & Docker hosts
+├── pyproject.toml                # Project metadata & Vercel entrypoint (v1.2.5)
+├── render.yaml                   # Blueprint for Render cloud hosting
 ├── requirements.txt              # Production Python package dependencies
 └── README.md                     # System documentation
 ```
@@ -209,17 +220,18 @@ GET /api/health
 ```json
 {
   "status": "healthy",
+  "version": "1.2.5",
   "service": "SonicAM Recognition Engine",
   "ffmpeg_configured": true,
-  "ffmpeg_path": "C:\ProgramData\chocolatey\bin\ffmpeg.exe",
-  "temp_directory": "C:\...\temp_media",
+  "ffmpeg_path": "C:\\ffmpeg\\bin\\ffmpeg.exe",
+  "temp_directory": "D:\\anything-to-audio\\temp_media",
   "allowed_formats": ["3gp", "aac", "avi", "flac", "flv", "m4a", "mkv", "mov", "mp3", "mp4", "ogg", "opus", "wav", "webm", "wmv"]
 }
 ```
 
 ---
 
-### 2. Recognize from Web / Social URL
+### 2. Recognize from Web / Social URL or Song Title
 ```http
 POST /api/recognize/url
 Content-Type: application/json
@@ -290,7 +302,7 @@ audio_blob: <binary_audio_payload (e.g. mic_capture.webm)>
 
 ## 📱 Mobile App (Android & iOS)
 
-The repository contains a cross-platform mobile client in `mobile/`:
+The repository contains a native cross-platform mobile client in `mobile/`:
 
 ### Running the Mobile App Locally
 ```bash
@@ -298,23 +310,26 @@ cd mobile
 npm install
 npx expo start
 ```
-- Press **`a`** to launch on an Android emulator or USB-connected device.
+- Press **`a`** to launch on an Android emulator or connected device.
 - Press **`i`** to launch on an iOS simulator.
 - Scan the interactive QR code with **Expo Go** on your physical phone.
 
 ### Compiling Standalone Android APK (CI/CD)
+The project includes a GitHub Actions workflow (`.github/workflows/build-apk.yml`) that builds standalone APKs:
 1. Go to your repository on GitHub.
 2. Click the **Actions** tab.
-3. Select the **Build Android APK** workflow in the left sidebar.
-4. Click **Run workflow** → choose `release` or `debug` mode → click **Run workflow**.
-5. Once the build completes (~5–8 minutes), download the generated `.apk` artifact directly from the release page or workflow summary.
+3. Select **Build Android APK** in the left sidebar.
+4. Click **Run workflow** → select `both`, `release`, or `debug` → click **Run workflow**.
+5. Once the build completes (~5–8 minutes), download the generated `.apk` directly from the release page or workflow artifacts:
+   - **`SonicAM.apk`**: Universal signed production release APK.
+   - **`SonicAM-Debug.apk`**: Standalone debug APK with zero certificate warnings.
 
 ---
 
 ## ☁️ Cloud Deployment
 
 ### Deploying to Hugging Face Spaces (Docker)
-SonicAM is deployed live on Hugging Face Spaces:
+SonicAM runs live on Hugging Face Spaces:
 - URL: [https://mohammed-ashraf-shaik-sonicam.hf.space](https://mohammed-ashraf-shaik-sonicam.hf.space)
 - Space: [https://huggingface.co/spaces/Mohammed-Ashraf-Shaik/SONICAM](https://huggingface.co/spaces/Mohammed-Ashraf-Shaik/SONICAM)
 
@@ -324,10 +339,10 @@ The repository includes `pyproject.toml` preconfigured for Vercel's Python runti
 [tool.vercel]
 entrypoint = "backend.main:app"
 ```
-The application dynamically routes temporary media processing to `/tmp` in serverless environments:
-```bash
-vercel --prod
-```
+The application dynamically routes temporary media processing to `/tmp` in serverless environments.
+
+### Deploying to Render
+A `render.yaml` blueprint is included for 1-click Docker web service deployment.
 
 ---
 

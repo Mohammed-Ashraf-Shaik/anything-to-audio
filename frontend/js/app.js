@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // If running inside standalone mobile APK, hide all APK download elements
   if (window.SONICAM_IS_MOBILE_APP) {
     if (document.body) document.body.classList.add('is-mobile-app');
-    document.querySelectorAll('#btnDirectDownloadApk, .hero-apk-badge-wrapper, .hero-apk-badge, a[href*="SonicAM.apk"], .footer-link[href*="SonicAM.apk"]').forEach(el => {
+    document.querySelectorAll('#btnDirectDownloadApk, .hero-apk-badge-wrapper, .hero-apk-badge, a[href*="SonicAM"], a[href*=".apk"], .footer-link[href*="SonicAM"], .footer-link[href*=".apk"]').forEach(el => {
       if (el && el.parentNode) el.parentNode.removeChild(el);
     });
   }
