@@ -212,7 +212,7 @@ export default function App() {
             textZoom={100}
             setSupportMultipleWindows={false}
             javaScriptCanOpenWindowsAutomatically={true}
-            userAgent="SonicAMMobile/1.2.4"
+            userAgent="SonicAMMobile/1.2.5"
             domStorageEnabled={true}
             javaScriptEnabled={true}
             androidHardwareAccelerationDisabled={false}
