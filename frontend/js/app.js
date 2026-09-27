@@ -3,21 +3,24 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 24/7 Global Cloud Recognition Engines (Hugging Face Spaces + Vercel Cloud)
-  const HF_BACKEND_URL = 'https://mohammed-ashraf-shaik-sonicam.hf.space';
+  // 24/7 Global Cloud Recognition Engine (Live Vercel Cloud Backend)
   const VERCEL_BACKEND_URL = 'https://anything-to-audio-am.vercel.app';
+  const HF_BACKEND_URL = 'https://mohammed-ashraf-shaik-sonicam.hf.space';
 
-  // Default to live 24/7 cloud backend; auto-upgrades to Hugging Face Space when ready
+  // Default to verified live cloud backend
   let activeBackend = window.SONICAM_BACKEND_URL || VERCEL_BACKEND_URL;
 
-  // Seamlessly ping Hugging Face Space; if active, prioritize HF
-  fetch(`${HF_BACKEND_URL}/api/health`, { method: 'GET', signal: AbortSignal.timeout(1500) })
-    .then(res => {
-      if (res.ok) {
-        activeBackend = HF_BACKEND_URL;
-      }
-    })
-    .catch(() => {});
+  // Safe background check for Hugging Face without AbortSignal.timeout
+  try {
+    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const tid = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 2000) : null;
+    fetch(`${HF_BACKEND_URL}/api/health`, { method: 'GET', signal: ctrl ? ctrl.signal : undefined })
+      .then(res => {
+        if (tid) clearTimeout(tid);
+        if (res.ok) activeBackend = HF_BACKEND_URL;
+      })
+      .catch(() => {});
+  } catch (_) {}
 
   function getApiUrl(endpoint) {
     if (activeBackend) {

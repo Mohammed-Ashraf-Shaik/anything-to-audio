@@ -13,8 +13,8 @@ import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { BUNDLED_HTML } from './assets/bundled_html';
 
-// 24/7 Global Cloud Recognition Engine (Hugging Face Spaces Deployment)
-const CLOUD_BACKEND_URL = 'https://mohammed-ashraf-shaik-sonicam.hf.space';
+// 24/7 Global Cloud Recognition Engine (Live Vercel Production Deployment)
+const CLOUD_BACKEND_URL = 'https://anything-to-audio-am.vercel.app';
 
 export default function App() {
   const webViewRef = useRef(null);
