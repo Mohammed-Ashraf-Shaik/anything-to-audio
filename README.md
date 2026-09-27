@@ -2,7 +2,7 @@
 title: SonicAM Universal Audio Recognition Engine
 emoji: ☕
 colorFrom: yellow
-colorTo: amber
+colorTo: red
 sdk: docker
 app_port: 8000
 pinned: false
