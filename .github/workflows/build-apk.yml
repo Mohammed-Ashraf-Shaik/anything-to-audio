@@ -6,7 +6,7 @@ on:
       build_type:
         description: "Choose APK Build Type (release, debug, or both)"
         required: true
-        default: "release"
+        default: "both"
         type: choice
         options:
           - release
@@ -68,67 +68,110 @@ jobs:
         run: |
           python3 build_bundle.py || true
           npx expo prebuild --platform android --clean
+
           # Ensure cleartext HTTP is explicitly permitted in native AndroidManifest.xml
           sed -i 's/<application /<application android:usesCleartextTraffic="true" /g' android/app/src/main/AndroidManifest.xml || true
+
+      - name: 📦 Generate React Native JS Bundle for Release
+        working-directory: ./mobile
+        run: |
+          # Explicitly pre-bundle the JS so it's available for the Gradle release build
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
+          echo "Bundle size: $(stat -c%s android/app/src/main/assets/index.android.bundle) bytes"
+          echo "Bundle content check (first 100 chars):"
+          head -c 100 android/app/src/main/assets/index.android.bundle || true
+          echo "---"
+          ls -lh android/app/src/main/assets/
 
       - name: 🔨 Build Standalone Universal Android APK (Phones & Tablets)
         working-directory: ./mobile/android
         run: |
           chmod +x gradlew
-          
-          # Pass node_modules path so Gradle's subshells resolve React Native modules in monorepo
+
+          # Pass node_modules path so Gradle's subshells resolve React Native modules
           export NODE_PATH="$(cd .. && pwd)/node_modules"
           export PATH="$(cd .. && pwd)/node_modules/.bin:$PATH"
 
           # Optimize Gradle properties for CI build stability & Universal Device Compatibility
           echo "newArchEnabled=false" >> gradle.properties
           echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m" >> gradle.properties
+          # Tell Gradle NOT to run bundleReleaseJsAndAssets again (we already bundled above)
+          echo "BUNDLE_IN_RELEASE=false" >> gradle.properties
 
           BUILD_CHOICE="${{ github.event.inputs.build_type || 'both' }}"
           echo "Selected Build Type: $BUILD_CHOICE"
 
           mkdir -p app/build/outputs/apk/output
 
-          # 1. Build Debug APK (instantly installable on all Android devices, zero Play Protect warnings)
+          # 1. Build Debug APK (instantly installable, zero Play Protect warnings)
           if [ "$BUILD_CHOICE" = "debug" ] || [ "$BUILD_CHOICE" = "both" ]; then
             echo "--- Building Debug APK ---"
             ./gradlew assembleDebug --stacktrace --no-daemon
-            mkdir -p app/build/outputs/apk/output
             cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/output/SonicAM-Debug.apk
-            echo "Debug APK generated at output/SonicAM-Debug.apk"
+            echo "Debug APK: $(stat -c%s app/build/outputs/apk/output/SonicAM-Debug.apk) bytes"
           fi
 
-          # 2. Build Release APK (standalone signed with persistent release keystore)
+          # 2. Build Release APK (standalone signed with persistent keystore)
           if [ "$BUILD_CHOICE" = "release" ] || [ "$BUILD_CHOICE" = "both" ]; then
             echo "--- Building Release APK ---"
+
+            KEYSTORE="$(cd ../.. && pwd)/mobile/sonicam-release.keystore"
+            echo "Using keystore: $KEYSTORE"
+            ls -la "$KEYSTORE" || echo "WARN: Keystore not found, generating ephemeral one..."
+            if [ ! -f "$KEYSTORE" ]; then
+              keytool -genkey -v -keystore "$KEYSTORE" -alias sonicam -keyalg RSA -keysize 2048 \
+                -validity 10000 -storepass sonicam123 -keypass sonicam123 \
+                -dname "CN=SonicAM, OU=Mobile, O=SonicAM, C=US"
+            fi
+
+            # Build unsigned release APK
             ./gradlew assembleRelease --stacktrace --no-daemon
 
-            KEYSTORE="$(cd ../../mobile && pwd)/sonicam-release.keystore"
-            if [ ! -f "$KEYSTORE" ]; then
-              echo "Keystore not found at $KEYSTORE, generating..."
-              keytool -genkey -v -keystore "$KEYSTORE" -alias sonicam -keyalg RSA -keysize 2048 -validity 10000 -storepass sonicam123 -keypass sonicam123 -dname "CN=SonicAM, OU=Mobile, O=SonicAM, C=US"
-            fi
-            
             ZIPALIGN=$(find $ANDROID_HOME/build-tools -name zipalign | sort -V | tail -n 1)
             APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
-            echo "Using zipalign: $ZIPALIGN"
-            echo "Using apksigner: $APKSIGNER"
+            echo "zipalign: $ZIPALIGN"
+            echo "apksigner: $APKSIGNER"
 
             RELEASE_DIR="app/build/outputs/apk/release"
-            
+            echo "Contents of release dir:"
+            ls -lh "$RELEASE_DIR" || true
+
+            # Sign and align
             if [ -f "$RELEASE_DIR/app-release-unsigned.apk" ]; then
               $ZIPALIGN -p -f 4 "$RELEASE_DIR/app-release-unsigned.apk" app/build/outputs/apk/output/aligned.apk
-              $APKSIGNER sign --ks "$KEYSTORE" --ks-pass pass:sonicam123 --out app/build/outputs/apk/output/SonicAM-Release.apk app/build/outputs/apk/output/aligned.apk
+              $APKSIGNER sign --ks "$KEYSTORE" --ks-alias sonicam --ks-pass pass:sonicam123 \
+                --out app/build/outputs/apk/output/SonicAM-Release.apk \
+                app/build/outputs/apk/output/aligned.apk
             elif [ -f "$RELEASE_DIR/app-release.apk" ]; then
-              $APKSIGNER sign --ks "$KEYSTORE" --ks-pass pass:sonicam123 --out app/build/outputs/apk/output/SonicAM-Release.apk "$RELEASE_DIR/app-release.apk"
+              $ZIPALIGN -p -f 4 "$RELEASE_DIR/app-release.apk" app/build/outputs/apk/output/aligned.apk
+              $APKSIGNER sign --ks "$KEYSTORE" --ks-alias sonicam --ks-pass pass:sonicam123 \
+                --out app/build/outputs/apk/output/SonicAM-Release.apk \
+                app/build/outputs/apk/output/aligned.apk
+            else
+              echo "ERROR: Could not find release APK in $RELEASE_DIR"
+              ls -lah "$RELEASE_DIR" || true
+              exit 1
             fi
 
-            $APKSIGNER verify --verbose app/build/outputs/apk/output/SonicAM-Release.apk || true
-            
-            # Create standard universal filenames for 1-click direct download
+            # Verify the signed APK
+            $APKSIGNER verify --verbose app/build/outputs/apk/output/SonicAM-Release.apk
+            echo "Release APK: $(stat -c%s app/build/outputs/apk/output/SonicAM-Release.apk) bytes"
+
+            # Verify the bundle IS inside the signed APK
+            unzip -l app/build/outputs/apk/output/SonicAM-Release.apk | grep "index.android.bundle"
+
+            # Create universal download filenames
             cp app/build/outputs/apk/output/SonicAM-Release.apk app/build/outputs/apk/output/SonicAM.apk
             cp app/build/outputs/apk/output/SonicAM-Release.apk app/build/outputs/apk/output/SonicAM-Universal.apk
-            echo "Universal APKs generated at output/SonicAM.apk & output/SonicAM-Universal.apk"
+            echo "All APKs ready:"
+            ls -lh app/build/outputs/apk/output/
           fi
 
       - name: 📤 Upload Installable APK Artifact
@@ -142,16 +185,17 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
         with:
-          tag_name: v1.2.4
-          name: "SonicAM Universal Android Release v1.2.4 (Phones & Tablets)"
+          tag_name: v1.2.5
+          name: "SonicAM Universal Android Release v1.2.5 - JS Bundle Fix"
           make_latest: true
           body: |
             ### ☕ SonicAM - Anything to Audio & Song Recognition Engine (Universal Android APK)
-            
-            **Direct Download Standalone APK** compiled for all Android devices.
-            
-            - **SonicAM-Release.apk / SonicAM.apk**: Standalone production build signed with persistent certificate.
-            - **SonicAM-Debug.apk**: Instantly installable debug build (no Play Protect warnings, universal device compatibility).
+
+            **v1.2.5 — Critical JS Bundle Fix**: Fixed "Unable to load script" crash on app launch.
+            The React Native JS bundle is now explicitly pre-generated and correctly packaged inside the APK.
+
+            - **SonicAM-Debug.apk**: Best for direct install (zero Play Protect warnings, opens immediately)
+            - **SonicAM-Release.apk / SonicAM.apk**: Signed production build
             - **Compatibility**: Android 7.0 (Nougat) through Android 15+
             - **Architecture**: Universal (ARM64-v8a, ARMv7a, x86, x86_64)
           files: |
