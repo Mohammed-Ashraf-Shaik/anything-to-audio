@@ -190,9 +190,13 @@ class SongRecognizer:
             clean_title = re.sub(re.escape(noise), '', clean_title, flags=re.IGNORECASE)
         clean_title = re.sub(r'[\"\'\|\#]', '', clean_title).strip()
 
+        # If clean_title looks like a URL or is empty, it cannot be resolved as a song title
+        if re.match(r'^https?://', clean_title, re.IGNORECASE) or len(clean_title) < 2:
+            return None
+
         # Build candidate search queries
         candidates = []
-        if raw_artist and raw_artist.lower() not in clean_title.lower():
+        if raw_artist and raw_artist.lower() not in clean_title.lower() and not re.match(r'^https?://', str(raw_artist), re.IGNORECASE):
             candidates.append(f"{clean_title} {raw_artist}".strip())
         candidates.append(clean_title)
 
@@ -200,14 +204,15 @@ class SongRecognizer:
         if len(parts) >= 2:
             p0 = re.sub(r'\[.*?\]|\(.*?\)', '', parts[0]).strip()
             p1 = re.sub(r'\[.*?\]|\(.*?\)', '', parts[1]).strip()
-            candidates.append(f"{p0} {p1}".strip())
-            candidates.append(f"{p1} {p0}".strip())
+            if not re.match(r'^https?://', p0, re.IGNORECASE) and not re.match(r'^https?://', p1, re.IGNORECASE):
+                candidates.append(f"{p0} {p1}".strip())
+                candidates.append(f"{p1} {p0}".strip())
 
         loop = asyncio.get_running_loop()
 
         def _search_itunes():
             for query in candidates:
-                if not query or len(query) < 2:
+                if not query or len(query) < 2 or re.match(r'^https?://', query, re.IGNORECASE):
                     continue
                 try:
                     url = f"https://itunes.apple.com/search?term={urllib.parse.quote(query)}&entity=song&limit=1"
@@ -231,15 +236,19 @@ class SongRecognizer:
             release_year = (itunes_item.get("releaseDate") or "")[:4]
             genre = itunes_item.get("primaryGenreName") or "Music"
             apple_music = itunes_item.get("trackViewUrl")
-        else:
-            title = clean_title or raw_title
-            artist = raw_artist or "Artist"
+        elif source_info.get("source_track") and source_info.get("source_artist"):
+            # Official Content ID track metadata provided by platform
+            title = source_info["source_track"]
+            artist = source_info["source_artist"]
             album = source_info.get("source_album") or "Single Release"
             preview_url = None
             cover_art = thumbnail
             release_year = None
             genre = "Music"
             apple_music = None
+        else:
+            # Neither acoustic match, iTunes catalog, nor official tags found a commercial song
+            return None
 
         search_query = urllib.parse.quote(f"{title} {artist}")
         spotify_url = f"https://open.spotify.com/search/{search_query}"

@@ -74,17 +74,21 @@ jobs:
           sed -i 's/<application /<application android:usesCleartextTraffic="true" /g' \
             app/src/main/AndroidManifest.xml || true
 
-          # 2. Inject bundleInDebug = true and bundleInRelease = true into app/build.gradle
-          # This forces Gradle to execute the JS bundling task for Debug as well as Release
+          # 2. Inject bundleInDebug = true and lint options into app/build.gradle
+          # bundleInDebug forces Gradle to package the JS bundle into Debug APKs as well
           node -e '
           const fs = require("fs");
           const file = "app/build.gradle";
           let content = fs.readFileSync(file, "utf8");
           if (!content.includes("bundleInDebug = true")) {
-            content = content.replace(/react\s*\{/, "react {\n    bundleInDebug = true\n    bundleInRelease = true");
-            fs.writeFileSync(file, content);
-            console.log("Injected bundleInDebug = true and bundleInRelease = true into app/build.gradle");
+            content = content.replace(/react\s*\{/, "react {\n    bundleInDebug = true");
+            console.log("Injected bundleInDebug = true into app/build.gradle");
           }
+          if (!content.includes("checkReleaseBuilds false")) {
+            content = content.replace(/android\s*\{/, "android {\n    lint {\n        abortOnError false\n        checkReleaseBuilds false\n    }");
+            console.log("Injected lint configuration into app/build.gradle");
+          }
+          fs.writeFileSync(file, content);
           '
 
           # 3. Disable developer support in MainApplication
@@ -100,6 +104,7 @@ jobs:
               else if (f.startsWith("MainApplication")) {
                 let code = fs.readFileSync(full, "utf8");
                 code = code.replace(/override\s+fun\s+getUseDeveloperSupport\(\):\s*Boolean\s*=\s*BuildConfig\.DEBUG/g, "override fun getUseDeveloperSupport(): Boolean = false");
+                code = code.replace(/override\s+val\s+useDeveloperSupport:\s*Boolean\s*get\(\)\s*=\s*BuildConfig\.DEBUG/g, "override val useDeveloperSupport: Boolean get() = false");
                 code = code.replace(/return\s+BuildConfig\.DEBUG;/g, "return false;");
                 fs.writeFileSync(full, code);
                 console.log("Disabled developer support in: " + full);

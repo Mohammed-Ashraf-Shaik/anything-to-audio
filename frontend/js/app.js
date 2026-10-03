@@ -5,22 +5,9 @@
 document.addEventListener('DOMContentLoaded', () => {
   // 24/7 Global Cloud Recognition Engine (Live Vercel Cloud Backend)
   const VERCEL_BACKEND_URL = 'https://anything-to-audio-am.vercel.app';
-  const HF_BACKEND_URL = 'https://mohammed-ashraf-shaik-sonicam.hf.space';
 
-  // Default to verified live cloud backend
+  // Exclusively route all requests through the live 24/7 Vercel cloud engine
   let activeBackend = window.SONICAM_BACKEND_URL || VERCEL_BACKEND_URL;
-
-  // Safe background check for Hugging Face without AbortSignal.timeout
-  try {
-    const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const tid = ctrl ? setTimeout(() => { try { ctrl.abort(); } catch (_) {} }, 2000) : null;
-    fetch(`${HF_BACKEND_URL}/api/health`, { method: 'GET', signal: ctrl ? ctrl.signal : undefined })
-      .then(res => {
-        if (tid) clearTimeout(tid);
-        if (res.ok) activeBackend = HF_BACKEND_URL;
-      })
-      .catch(() => {});
-  } catch (_) {}
 
   function getApiUrl(endpoint) {
     if (activeBackend) {
@@ -730,7 +717,7 @@ document.addEventListener('DOMContentLoaded', () => {
         artist: 'Music Artist'
       } : null)));
 
-      if (hint && hint.title) {
+      if (hint && hint.title && !/^https?:\/\//i.test(hint.title)) {
         await resolveAndRenderFallbackSong(hint, data.source_info);
         return;
       }
@@ -899,26 +886,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (!matchedSong) {
-      const finalTitle = cleanTitle || rawTitle;
-      const finalArtist = rawArtist || "Music Artist";
-      matchedSong = {
-        title: finalTitle,
-        artist: finalArtist,
-        album: (sourceInfo && sourceInfo.source_album) || "Single Release",
-        label: "Direct Resolution",
-        release_year: new Date().getFullYear().toString(),
-        genre: "Music",
-        cover_art: thumbnail || null,
-        preview_url: null,
-        lyrics: [],
-        has_lyrics: false,
-        offset_seconds: null,
-        links: {
-          spotify: `https://open.spotify.com/search/${encodeURIComponent(finalTitle + ' ' + finalArtist)}`,
-          apple_music: `https://music.apple.com/us/search?term=${encodeURIComponent(finalTitle + ' ' + finalArtist)}`,
-          youtube_music: `https://music.youtube.com/search?q=${encodeURIComponent(finalTitle + ' ' + finalArtist)}`
-        }
-      };
+      if (sourceInfo && sourceInfo.source_track && sourceInfo.source_artist) {
+        matchedSong = {
+          title: sourceInfo.source_track,
+          artist: sourceInfo.source_artist,
+          album: sourceInfo.source_album || "Single Release",
+          label: "Music Catalog",
+          release_year: new Date().getFullYear().toString(),
+          genre: "Music",
+          cover_art: thumbnail || null,
+          preview_url: null,
+          lyrics: [],
+          has_lyrics: false,
+          offset_seconds: null,
+          links: {
+            spotify: `https://open.spotify.com/search/${encodeURIComponent(sourceInfo.source_track + ' ' + sourceInfo.source_artist)}`,
+            apple_music: `https://music.apple.com/us/search?term=${encodeURIComponent(sourceInfo.source_track + ' ' + sourceInfo.source_artist)}`,
+            youtube_music: `https://music.youtube.com/search?q=${encodeURIComponent(sourceInfo.source_track + ' ' + sourceInfo.source_artist)}`
+          }
+        };
+      } else {
+        renderNotFound({
+          matched: false,
+          message: "No commercial song recognized from this audio segment. Ensure the audio contains clear music rather than speech or silence.",
+          source_info: sourceInfo || {}
+        });
+        return;
+      }
     }
 
     renderResult({
