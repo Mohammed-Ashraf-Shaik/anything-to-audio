@@ -7,8 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const HUGGINGFACE_BACKEND_URL = 'https://mohammed-ashraf-shaik-sonicam.hf.space';
   const VERCEL_BACKEND_URL = 'https://anything-to-audio-am.vercel.app';
 
-  // Exclusively route all requests through 24/7 worldwide cloud engines
-  let activeBackend = window.SONICAM_BACKEND_URL || HUGGINGFACE_BACKEND_URL;
+  // Exclusively route all requests through 24/7 worldwide cloud engines (Default to verified live Vercel cloud)
+  let activeBackend = window.SONICAM_BACKEND_URL || VERCEL_BACKEND_URL;
 
   (async function initCloudHost() {
     if (window.SONICAM_BACKEND_URL) return;
