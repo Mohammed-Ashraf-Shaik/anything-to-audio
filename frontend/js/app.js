@@ -284,13 +284,6 @@ document.addEventListener('DOMContentLoaded', () => {
       advancePipelineStep(2, "Matching acoustic landmark fingerprints...");
       
       if (!response.ok) {
-        // If server extraction failed, try resolving via title/keywords before failing
-        try {
-          await resolveAndRenderFallbackSong({ title: raw });
-          stopPipeline();
-          return;
-        } catch (_) {}
-
         const errData = await response.json().catch(() => ({}));
         throw new Error(errData.detail || `Server returned status ${response.status} while analyzing link.`);
       }
@@ -301,12 +294,6 @@ document.addEventListener('DOMContentLoaded', () => {
       stopPipeline();
       renderResult(data);
     } catch (err) {
-      try {
-        await resolveAndRenderFallbackSong({ title: raw });
-        stopPipeline();
-        return;
-      } catch (_) {}
-
       stopPipeline();
       renderError(err.message);
     }
@@ -820,6 +807,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Convert metadata hint to full song showcase
   async function resolveAndRenderFallbackSong(hint, sourceInfo) {
     const rawTitle = hint.title || "";
+    if (!rawTitle || /^https?:\/\//i.test(rawTitle.trim())) {
+      renderNotFound({
+        matched: false,
+        message: "No commercial song recognized from this audio segment. Ensure the audio contains clear music rather than speech or silence.",
+        source_info: sourceInfo || {}
+      });
+      return;
+    }
     const rawArtist = (hint.artist && hint.artist !== "Unknown") ? hint.artist : "";
     const thumbnail = hint.thumbnail || (sourceInfo && sourceInfo.source_thumbnail) || "";
 
@@ -834,6 +829,15 @@ document.addEventListener('DOMContentLoaded', () => {
       cleanTitle = cleanTitle.replace(new RegExp(n, 'gi'), '');
     });
     cleanTitle = cleanTitle.replace(/["'|#]/g, '').trim();
+
+    if (/^https?:\/\//i.test(cleanTitle) || cleanTitle.length < 2) {
+      renderNotFound({
+        matched: false,
+        message: "No commercial song recognized from this audio segment. Ensure the audio contains clear music rather than speech or silence.",
+        source_info: sourceInfo || {}
+      });
+      return;
+    }
 
     // Query iTunes API directly from browser/app
     let matchedSong = null;
@@ -852,7 +856,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     for (const q of candidates) {
-      if (!q || q.length < 2) continue;
+      if (!q || q.length < 2 || /^https?:\/\//i.test(q)) continue;
       try {
         const resp = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&entity=song&limit=1`);
         if (resp.ok) {
