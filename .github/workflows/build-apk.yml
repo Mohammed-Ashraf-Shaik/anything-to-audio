@@ -74,15 +74,15 @@ jobs:
           sed -i 's/<application /<application android:usesCleartextTraffic="true" /g' \
             app/src/main/AndroidManifest.xml || true
 
-          # 2. Inject bundleInDebug = true and lint options into app/build.gradle
-          # bundleInDebug forces Gradle to package the JS bundle into Debug APKs as well
+          # 2. Configure debuggableVariants = [] and lint options into app/build.gradle
+          # debuggableVariants = [] forces Gradle to package the offline JS bundle into Debug APKs as well (Release bundles by default)
           node -e '
           const fs = require("fs");
           const file = "app/build.gradle";
           let content = fs.readFileSync(file, "utf8");
-          if (!content.includes("bundleInDebug = true")) {
-            content = content.replace(/react\s*\{/, "react {\n    bundleInDebug = true");
-            console.log("Injected bundleInDebug = true into app/build.gradle");
+          if (!content.includes("debuggableVariants = []")) {
+            content = content.replace(/react\s*\{/, "react {\n    debuggableVariants = []");
+            console.log("Injected debuggableVariants = [] into app/build.gradle");
           }
           if (!content.includes("checkReleaseBuilds false")) {
             content = content.replace(/android\s*\{/, "android {\n    lint {\n        abortOnError false\n        checkReleaseBuilds false\n    }");
