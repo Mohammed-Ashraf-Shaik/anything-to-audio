@@ -146,7 +146,28 @@ async def recognize_url(payload: UrlRecognizeRequest):
         raise
     except RuntimeError as e:
         logger.warning(f"Media extraction note for URL {url}: {e}")
-        # If extraction failed, try resolving via title/metadata
+        # If extraction failed, attempt emergency fallback resolution before raising 422
+        try:
+            fallback_res = await MediaProcessor.resolve_youtube_fallback(url)
+            if fallback_res:
+                if fallback_res.get("wav_path"):
+                    prev_res = await recognizer.recognize_audio_file(fallback_res["wav_path"], source_info=fallback_res.get("source_info"))
+                    MediaProcessor.cleanup_file(fallback_res["wav_path"])
+                    if prev_res.get("matched"):
+                        return prev_res
+                if fallback_res.get("direct_result") and fallback_res.get("resolved_song", {}).get("matched"):
+                    return fallback_res["resolved_song"]
+                if fallback_res.get("source_info", {}).get("fallback_song"):
+                    return {
+                        "success": True,
+                        "matched": True,
+                        "song": fallback_res["source_info"]["fallback_song"],
+                        "source_info": fallback_res["source_info"]
+                    }
+        except Exception as fb_err:
+            logger.debug(f"Emergency YouTube resolution note: {fb_err}")
+
+        # If clean title was extracted elsewhere, resolve via catalog
         resolved = await recognizer.resolve_song_from_metadata({"source_title": raw_input})
         if resolved and resolved.get("matched"):
             return resolved

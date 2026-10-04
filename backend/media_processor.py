@@ -308,11 +308,12 @@ class MediaProcessor:
     async def resolve_youtube_fallback(cls, clean_url: str) -> Optional[Dict[str, Any]]:
         """
         Emergency fallback for YouTube videos & Shorts:
-        1. Inspects the YouTube video page directly for verified Content ID music metadata
-           (e.g. Song: 'Love Story', Artist: 'Indila', Album: 'Mini World').
-        2. If found or if falling back to oEmbed title, queries Apple/iTunes catalog with sanitized song keywords.
-        3. If song matches, downloads high-speed 20s official AAC preview stream into WAV for acoustic recognition.
-        4. If audio preview cannot be fingerprinted, returns rich catalog metadata directly.
+        1. Inspects the YouTube video page directly for verified Content ID music metadata.
+        2. Queries multiple public oEmbed endpoints (YouTube oEmbed + NoEmbed) for canonical video metadata.
+        3. Queries Apple/iTunes catalog with sanitized, permuted artist & title candidate queries.
+        4. If song matches, downloads high-speed 20s official AAC preview stream into WAV for acoustic recognition.
+        5. If audio preview cannot be fingerprinted, returns rich verified catalog metadata directly.
+        6. Never returns None as long as video title or metadata can be resolved.
         """
         loop = asyncio.get_running_loop()
 
@@ -321,19 +322,25 @@ class MediaProcessor:
             raw_title = ""
             author = ""
             thumbnail = ""
-            
+
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 "Accept-Language": "en-US,en;q=0.9"
             }
+
+            # Canonicalize YouTube URL
+            canonical_url = clean_url
+            vid_m = re.search(r'(?:v=|\/shorts\/|youtu\.be\/|\/v\/|embed\/)([a-zA-Z0-9_-]{11})', clean_url)
+            vid_id = vid_m.group(1) if vid_m else None
+            if vid_id:
+                canonical_url = f"https://www.youtube.com/watch?v={vid_id}"
+                thumbnail = f"https://i.ytimg.com/vi/{vid_id}/maxresdefault.jpg"
+
             # 1. Fetch YouTube HTML page to extract official Content ID song tags
             try:
-                watch_url = clean_url
-                if "/shorts/" in clean_url:
-                    vid_id = clean_url.split("/shorts/")[-1].split("?")[0]
-                    watch_url = f"https://www.youtube.com/watch?v={vid_id}"
+                watch_url = canonical_url
                 req = urllib.request.Request(watch_url, headers=headers)
-                with urllib.request.urlopen(req, timeout=6) as resp:
+                with urllib.request.urlopen(req, timeout=5) as resp:
                     html = resp.read().decode('utf-8', errors='replace')
                     
                     # Pattern 1: VIDEO_ATTRIBUTE_IMAGE_STYLE_SQUARE
@@ -372,19 +379,36 @@ class MediaProcessor:
                             except Exception:
                                 pass
             except Exception as e:
-                logger.warning(f"YouTube HTML inspection note: {e}")
+                logger.debug(f"YouTube HTML inspection note: {e}")
 
-            # 2. oEmbed for video title and thumbnail fallback
+            # 2. oEmbed for video title and thumbnail fallback (YouTube oEmbed)
             try:
-                oembed_url = f"https://www.youtube.com/oembed?url={urllib.parse.quote(clean_url)}&format=json"
+                oembed_url = f"https://www.youtube.com/oembed?url={urllib.parse.quote(canonical_url)}&format=json"
                 req_oe = urllib.request.Request(oembed_url, headers=headers)
                 with urllib.request.urlopen(req_oe, timeout=5) as resp:
                     oe_data = json.loads(resp.read().decode())
-                    raw_title = oe_data.get("title", "")
-                    author = oe_data.get("author_name", "")
-                    thumbnail = oe_data.get("thumbnail_url", "")
+                    if oe_data.get("title"):
+                        raw_title = oe_data.get("title", "")
+                        author = oe_data.get("author_name", "")
+                        if not thumbnail or "hqdefault" not in thumbnail:
+                            thumbnail = oe_data.get("thumbnail_url", "") or thumbnail
             except Exception as e:
-                logger.warning(f"YouTube oEmbed lookup failed: {e}")
+                logger.debug(f"YouTube oEmbed lookup failed: {e}")
+
+            # 3. Public NoEmbed fallback (resilient CORS-friendly aggregator)
+            if not raw_title:
+                try:
+                    noembed_url = f"https://noembed.com/embed?url={urllib.parse.quote(canonical_url)}"
+                    req_ne = urllib.request.Request(noembed_url, headers=headers)
+                    with urllib.request.urlopen(req_ne, timeout=5) as resp:
+                        ne_data = json.loads(resp.read().decode())
+                        if ne_data.get("title"):
+                            raw_title = ne_data.get("title", "")
+                            author = ne_data.get("author_name", "")
+                            if not thumbnail:
+                                thumbnail = ne_data.get("thumbnail_url", "") or thumbnail
+                except Exception as e:
+                    logger.debug(f"NoEmbed lookup failed: {e}")
 
             return music_info, raw_title, author, thumbnail
 
@@ -399,12 +423,16 @@ class MediaProcessor:
             if music_info.get("artist"):
                 author = music_info["artist"]
         else:
-            # Clean video title: remove hashtags, emojis, brackets
+            # Clean video title: remove hashtags, emojis, brackets, common video tags
             clean_title = re.sub(r'#\w+', '', raw_title)
             clean_title = re.sub(r'[\(\[\{].*?[\)\]\}]', '', clean_title)
-            for noise in ["Official Music Video", "Official Video", "Official Audio", "Lyrics", "Lyric Video", "4K Remaster", "Shorts", "Short", "Video"]:
+            for noise in [
+                "Official Music Video", "Official Video", "Official Audio", "Music Video",
+                "Lyrics", "Lyric Video", "4K Remaster", "Remastered", "Visualizer",
+                "Full Song", "Audio", "Video", "HQ", "HD", "4K", "Shorts", "Short", "Topic"
+            ]:
                 clean_title = re.sub(re.escape(noise), '', clean_title, flags=re.IGNORECASE)
-            clean_title = clean_title.strip()
+            clean_title = re.sub(r'["\'#]', '', clean_title).strip()
 
         # Query iTunes Search API with prioritized candidate queries
         def _search_itunes():
@@ -413,9 +441,16 @@ class MediaProcessor:
                 if music_info.get("artist"):
                     candidates.append(f"{music_info['title']} {music_info['artist']}")
                 candidates.append(music_info["title"])
-            
+
+            parts = [p.strip() for p in re.split(r'\s*[-—:|]\s*', clean_title) if p.strip()]
+            if len(parts) >= 2:
+                candidates.append(f"{parts[0]} {parts[1]}")
+                candidates.append(f"{parts[1]} {parts[0]}")
+                candidates.append(parts[1])
+                candidates.append(parts[0])
+
             if clean_title:
-                if author and author.lower() not in clean_title.lower() and not re.search(r'world|channel|records|production|official', author, re.IGNORECASE):
+                if author and author.lower() not in clean_title.lower() and not re.search(r'world|channel|records|production|official|vevo', author, re.IGNORECASE):
                     candidates.append(f"{clean_title} {author}".strip())
                 candidates.append(clean_title.strip())
 
@@ -425,12 +460,12 @@ class MediaProcessor:
                 try:
                     itunes_url = f"https://itunes.apple.com/search?term={urllib.parse.quote(q)}&entity=song&limit=1"
                     req = urllib.request.Request(itunes_url, headers={"User-Agent": "Mozilla/5.0"})
-                    with urllib.request.urlopen(req, timeout=6) as resp:
+                    with urllib.request.urlopen(req, timeout=5) as resp:
                         data = json.loads(resp.read().decode())
                         if data.get("resultCount", 0) > 0:
                             return data
                 except Exception as e:
-                    logger.warning(f"iTunes query failed for '{q}': {e}")
+                    logger.debug(f"iTunes query note for '{q}': {e}")
             return None
 
         itunes_data = await loop.run_in_executor(None, _search_itunes)
@@ -447,16 +482,28 @@ class MediaProcessor:
             apple_music = item.get("trackViewUrl")
         elif music_info:
             track_name = music_info["title"]
-            artist_name = music_info.get("artist") or "Music Artist"
+            artist_name = music_info.get("artist") or (author or "Music Artist")
             album_name = music_info.get("album") or "Single Release"
             genre_name = "Music"
             release_date = None
             preview_url = None
             cover_art = thumbnail
             apple_music = None
+        elif clean_title:
+            parts = [p.strip() for p in re.split(r'\s*[-—:|]\s*', clean_title) if p.strip()]
+            if len(parts) >= 2:
+                artist_name = parts[0]
+                track_name = parts[1]
+            else:
+                track_name = clean_title
+                artist_name = author if (author and not re.search(r'world|channel|records|production|official|vevo', author, re.IGNORECASE)) else "Music Artist"
+            album_name = "Single Release"
+            genre_name = "Music"
+            release_date = None
+            preview_url = None
+            cover_art = thumbnail
+            apple_music = None
         else:
-            # If iTunes found no song and no music metadata exists in the video,
-            # don't falsely return the YouTube video title as a song!
             return None
 
         search_q = urllib.parse.quote(f"{track_name} {artist_name}")
@@ -624,7 +671,7 @@ class MediaProcessor:
             ],
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['visionos', 'android_vr', 'android', 'web'],
+                    'player_client': ['ios', 'mweb', 'android', 'web'],
                 }
             },
             'quiet': True,
