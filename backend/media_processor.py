@@ -124,19 +124,80 @@ class MediaProcessor:
         clean_match = re.search(r'https?://[^\s<>"\')\]]+', raw_url)
         clean_url = clean_match.group(0).rstrip('.,;:') if clean_match else raw_url.strip()
 
-        # Detect platform hint
+        # Detect platform hint across all major global, video, messaging, forum, decentralized, and regional networks
         platform_hint = None
         lower = clean_url.lower()
-        if "instagram.com" in lower:
+
+        if "youtube.com" in lower or "youtu.be" in lower:
+            platform_hint = "youtube"
+        elif "instagram.com" in lower or "instagr.am" in lower:
             platform_hint = "instagram"
         elif "tiktok.com" in lower:
             platform_hint = "tiktok"
-        elif "youtube.com" in lower or "youtu.be" in lower:
-            platform_hint = "youtube"
+        elif "twitter.com" in lower or "x.com" in lower or "t.co" in lower:
+            platform_hint = "twitter"
+        elif "facebook.com" in lower or "fb.watch" in lower or "fb.com" in lower:
+            platform_hint = "facebook"
+        elif "threads.net" in lower:
+            platform_hint = "threads"
+        elif "snapchat.com" in lower:
+            platform_hint = "snapchat"
+        elif "linkedin.com" in lower:
+            platform_hint = "linkedin"
+        elif "pinterest.com" in lower or "pin.it" in lower:
+            platform_hint = "pinterest"
+        elif "tumblr.com" in lower:
+            platform_hint = "tumblr"
+        elif "twitch.tv" in lower:
+            platform_hint = "twitch"
         elif "vimeo.com" in lower:
             platform_hint = "vimeo"
-        elif "twitter.com" in lower or "x.com" in lower:
-            platform_hint = "twitter"
+        elif "rumble.com" in lower:
+            platform_hint = "rumble"
+        elif "kick.com" in lower:
+            platform_hint = "kick"
+        elif "dailymotion.com" in lower or "dai.ly" in lower:
+            platform_hint = "dailymotion"
+        elif "bilibili.com" in lower or "b23.tv" in lower:
+            platform_hint = "bilibili"
+        elif "kuaishou.com" in lower or "kwai.com" in lower:
+            platform_hint = "kuaishou"
+        elif "soundcloud.com" in lower or "snd.sc" in lower:
+            platform_hint = "soundcloud"
+        elif "reddit.com" in lower or "redd.it" in lower or "v.redd.it" in lower:
+            platform_hint = "reddit"
+        elif "telegram.org" in lower or "t.me" in lower or "telegram.me" in lower:
+            platform_hint = "telegram"
+        elif "discord.com" in lower or "discord.gg" in lower or "discordapp.com" in lower or "discordapp.net" in lower:
+            platform_hint = "discord"
+        elif "whatsapp.com" in lower or "wa.me" in lower:
+            platform_hint = "whatsapp"
+        elif "bsky.app" in lower or "bsky.social" in lower:
+            platform_hint = "bluesky"
+        elif "mastodon" in lower or "mstdn" in lower:
+            platform_hint = "mastodon"
+        elif "lemmy" in lower:
+            platform_hint = "lemmy"
+        elif "pixelfed" in lower:
+            platform_hint = "pixelfed"
+        elif "weibo.com" in lower or "weibo.cn" in lower:
+            platform_hint = "weibo"
+        elif "xiaohongshu.com" in lower or "xhslink.com" in lower:
+            platform_hint = "xiaohongshu"
+        elif "douyin.com" in lower:
+            platform_hint = "douyin"
+        elif "vk.com" in lower or "vkontakte.ru" in lower:
+            platform_hint = "vk"
+        elif "ok.ru" in lower:
+            platform_hint = "okru"
+        elif "sharechat.com" in lower:
+            platform_hint = "sharechat"
+        elif "mojapp.in" in lower:
+            platform_hint = "moj"
+        elif "myjosh.in" in lower:
+            platform_hint = "josh"
+        elif "github.com" in lower or "raw.githubusercontent.com" in lower:
+            platform_hint = "github"
 
         # Standardize mobile youtube
         if "music.youtube.com" in clean_url.lower():
@@ -169,8 +230,8 @@ class MediaProcessor:
         if live_match:
             clean_url = f"https://www.youtube.com/watch?v={live_match.group(1)}"
 
-        # Strip Instagram tracking query parameters
-        if "instagram.com" in clean_url.lower():
+        # Strip tracking query parameters from common social share links
+        if any(d in clean_url.lower() for d in ["instagram.com", "threads.net", "facebook.com", "fb.watch"]):
             clean_url = clean_url.split('?')[0]
 
         # Check for direct media URL (.mp4, .webm, .mov, etc.)
@@ -456,6 +517,67 @@ class MediaProcessor:
         }
 
     @classmethod
+    async def extract_media_from_html_page(
+        cls,
+        clean_url: str,
+        start_time: int = 0,
+        duration: int = 20
+    ) -> Optional[Tuple[Path, Dict[str, Any]]]:
+        """
+        Inspect generic web pages (Threads, Bluesky, Mastodon, Reddit, Substack, Medium, Discord, forums)
+        for embedded HTML5 <video>, <audio>, or OpenGraph media streams and slice audio directly via FFmpeg.
+        """
+        loop = asyncio.get_running_loop()
+        def _fetch_page_media():
+            try:
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+                }
+                req = urllib.request.Request(clean_url, headers=headers)
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    html = resp.read().decode('utf-8', errors='replace')
+                    title_match = re.search(r'<title>(.*?)</title>', html, re.IGNORECASE)
+                    page_title = title_match.group(1).strip() if title_match else ""
+
+                    # OpenGraph Video, Audio & HTML5 media tags
+                    og_patterns = [
+                        r'<meta[^>]+property=["\']og:video(?::secure_url|:url)?["\'][^>]+content=["\']([^"\']+)["\']',
+                        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:video(?::secure_url|:url)?["\']',
+                        r'<meta[^>]+property=["\']og:audio(?::secure_url|:url)?["\'][^>]+content=["\']([^"\']+)["\']',
+                        r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:audio(?::secure_url|:url)?["\']',
+                        r'<meta[^>]+name=["\']twitter:player:stream["\'][^>]+content=["\']([^"\']+)["\']',
+                        r'<video[^>]+src=["\']([^"\']+)["\']',
+                        r'<source[^>]+src=["\']([^"\']+\.(?:mp4|webm|m4a|mp3|ogg|wav))["\']',
+                        r'<audio[^>]+src=["\']([^"\']+)["\']'
+                    ]
+                    for pat in og_patterns:
+                        m = re.search(pat, html, re.IGNORECASE)
+                        if m:
+                            stream_link = m.group(1)
+                            if stream_link.startswith("//"):
+                                stream_link = "https:" + stream_link
+                            elif not stream_link.startswith("http"):
+                                stream_link = urllib.parse.urljoin(clean_url, stream_link)
+                            return stream_link, page_title
+            except Exception as e:
+                logger.debug(f"HTML media extraction note: {e}")
+            return None, ""
+
+        stream_url, page_title = await loop.run_in_executor(None, _fetch_page_media)
+        if stream_url:
+            try:
+                wav_path = await cls.extract_audio_from_stream(stream_url, start_time, duration)
+                if wav_path and wav_path.exists() and wav_path.stat().st_size > 0:
+                    return wav_path, {
+                        "source_title": page_title or clean_url.split('/')[-1],
+                        "webpage_url": clean_url
+                    }
+            except Exception as e:
+                logger.warning(f"Extracted HTML stream failed demux: {e}")
+        return None
+
+    @classmethod
     async def extract_audio_from_url(
         cls,
         url: str,
@@ -624,6 +746,16 @@ class MediaProcessor:
                         return stream_wav, extracted_info
         except Exception as e:
             logger.warning(f"Tier 2 stream demux failed: {e}")
+
+        # Tier 2.4: OpenGraph & HTML5 Video/Audio Stream Extraction Fallback (Threads, Bluesky, Mastodon, Reddit, Substack, Forums)
+        try:
+            logger.info("Attempting Tier 2.4 OpenGraph & HTML5 media extraction fallback...")
+            html_res = await cls.extract_media_from_html_page(clean_url, start_time, duration)
+            if html_res:
+                logger.info(f"Tier 2.4 HTML media extraction succeeded: {html_res[0]}")
+                return html_res
+        except Exception as e:
+            logger.debug(f"Tier 2.4 HTML detector note: {e}")
 
         # Tier 2.5: Resilient YouTube Metadata & Preview Fallback
         if platform_hint == "youtube":

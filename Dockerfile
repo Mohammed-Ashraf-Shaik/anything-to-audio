@@ -4,7 +4,7 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
-    PORT=8000
+    PORT=7860
 
 # Install system dependencies including FFmpeg
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -30,8 +30,8 @@ RUN chown -R user:user /app
 
 USER user
 
-# Expose port
-EXPOSE 8000
+# Expose port (Hugging Face default 7860)
+EXPOSE 7860
 
 # Start server
-CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-7860}"]

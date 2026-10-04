@@ -3,17 +3,54 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
-  // 24/7 Global Cloud Recognition Engine (Live Vercel Cloud Backend)
+  // 24/7 Global Cloud Recognition Engines (Hugging Face Space + Vercel Failover)
+  const HUGGINGFACE_BACKEND_URL = 'https://mohammed-ashraf-shaik-sonicam.hf.space';
   const VERCEL_BACKEND_URL = 'https://anything-to-audio-am.vercel.app';
 
-  // Exclusively route all requests through the live 24/7 Vercel cloud engine
-  let activeBackend = window.SONICAM_BACKEND_URL || VERCEL_BACKEND_URL;
+  // Exclusively route all requests through 24/7 worldwide cloud engines
+  let activeBackend = window.SONICAM_BACKEND_URL || HUGGINGFACE_BACKEND_URL;
+
+  (async function initCloudHost() {
+    if (window.SONICAM_BACKEND_URL) return;
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2000);
+      const res = await fetch(`${HUGGINGFACE_BACKEND_URL}/api/health`, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (res.ok) {
+        activeBackend = HUGGINGFACE_BACKEND_URL;
+        console.log("Connected to 24/7 Hugging Face Cloud Engine:", activeBackend);
+        return;
+      }
+    } catch (_) {}
+    // If Hugging Face is paused or waking up, automatically route to live Vercel cloud
+    activeBackend = VERCEL_BACKEND_URL;
+    console.log("Using 24/7 Vercel Cloud Engine:", activeBackend);
+  })();
 
   function getApiUrl(endpoint) {
     if (activeBackend) {
       return activeBackend.replace(/\/+$/, '') + endpoint;
     }
     return endpoint;
+  }
+
+  // Resilient Cloud Fetch with Automatic Multi-Cloud Failover
+  async function fetchWithCloudFailover(endpoint, options = {}) {
+    let primaryUrl = getApiUrl(endpoint);
+    try {
+      const res = await fetch(primaryUrl, options);
+      if (res.status === 503 || res.status === 502 || res.status === 504) {
+        throw new Error(`Cloud host returned status ${res.status}`);
+      }
+      return res;
+    } catch (err) {
+      const altBackend = (activeBackend === HUGGINGFACE_BACKEND_URL) ? VERCEL_BACKEND_URL : HUGGINGFACE_BACKEND_URL;
+      console.warn(`Primary cloud (${activeBackend}) temporarily unavailable, seamlessly failing over to ${altBackend}...`);
+      activeBackend = altBackend;
+      const altUrl = getApiUrl(endpoint);
+      return await fetch(altUrl, options);
+    }
   }
 
   // If running inside standalone mobile APK, hide all APK download elements
@@ -226,11 +263,156 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ==========================================
+  // Platform Detection & Filter Hub (60+ Networks)
+  // ==========================================
+  const platformDetectedPill = document.getElementById('platformDetectedPill');
+  const detectedPlatformName = document.getElementById('detectedPlatformName');
+  const platTabs = document.querySelectorAll('.plat-tab');
+  const platChips = document.querySelectorAll('.plat-chip');
+
+  const PLATFORMS_MAP = [
+    { name: "YouTube & Shorts", match: /youtube\.com|youtu\.be/i, domain: "youtube.com" },
+    { name: "TikTok", match: /tiktok\.com/i, domain: "tiktok.com" },
+    { name: "Instagram Reels & Posts", match: /instagram\.com|instagr\.am/i, domain: "instagram.com" },
+    { name: "X (formerly Twitter)", match: /twitter\.com|x\.com|t\.co/i, domain: "x.com" },
+    { name: "Threads", match: /threads\.net/i, domain: "threads.net" },
+    { name: "Facebook Watch & Posts", match: /facebook\.com|fb\.watch|fb\.com/i, domain: "facebook.com" },
+    { name: "Snapchat", match: /snapchat\.com/i, domain: "snapchat.com" },
+    { name: "LinkedIn", match: /linkedin\.com/i, domain: "linkedin.com" },
+    { name: "Pinterest", match: /pinterest\.com|pin\.it/i, domain: "pinterest.com" },
+    { name: "Tumblr", match: /tumblr\.com/i, domain: "tumblr.com" },
+    { name: "Twitch", match: /twitch\.tv/i, domain: "twitch.tv" },
+    { name: "Vimeo", match: /vimeo\.com/i, domain: "vimeo.com" },
+    { name: "Rumble", match: /rumble\.com/i, domain: "rumble.com" },
+    { name: "Kick", match: /kick\.com/i, domain: "kick.com" },
+    { name: "Dailymotion", match: /dailymotion\.com|dai\.ly/i, domain: "dailymotion.com" },
+    { name: "Bilibili", match: /bilibili\.com|b23\.tv/i, domain: "bilibili.com" },
+    { name: "Kuaishou", match: /kuaishou\.com|kwai\.com/i, domain: "kuaishou.com" },
+    { name: "SoundCloud", match: /soundcloud\.com|snd\.sc/i, domain: "soundcloud.com" },
+    { name: "Telegram", match: /t\.me|telegram\.org|telegram\.me/i, domain: "t.me" },
+    { name: "Discord", match: /discord\.com|discordapp\.com|discord\.gg|discordapp\.net/i, domain: "discord.com" },
+    { name: "WhatsApp", match: /whatsapp\.com|wa\.me/i, domain: "whatsapp.com" },
+    { name: "Messenger", match: /messenger\.com|m\.me/i, domain: "messenger.com" },
+    { name: "Signal", match: /signal\.org|signal\.group/i, domain: "signal.org" },
+    { name: "WeChat", match: /wechat\.com|weixin\.qq\.com/i, domain: "wechat.com" },
+    { name: "LINE", match: /line\.me/i, domain: "line.me" },
+    { name: "Viber", match: /viber\.com/i, domain: "viber.com" },
+    { name: "QQ", match: /qq\.com/i, domain: "qq.com" },
+    { name: "Slack", match: /slack\.com/i, domain: "slack.com" },
+    { name: "Reddit", match: /reddit\.com|redd\.it|v\.redd\.it/i, domain: "reddit.com" },
+    { name: "Quora", match: /quora\.com/i, domain: "quora.com" },
+    { name: "Medium", match: /medium\.com/i, domain: "medium.com" },
+    { name: "Stack Overflow", match: /stackoverflow\.com/i, domain: "stackoverflow.com" },
+    { name: "Substack", match: /substack\.com/i, domain: "substack.com" },
+    { name: "Hacker News", match: /news\.ycombinator\.com/i, domain: "news.ycombinator.com" },
+    { name: "Bluesky", match: /bsky\.app|bsky\.social/i, domain: "bsky.app" },
+    { name: "Mastodon", match: /mastodon|mstdn/i, domain: "mastodon.social" },
+    { name: "Lemmy", match: /lemmy/i, domain: "lemmy.world" },
+    { name: "Pixelfed", match: /pixelfed/i, domain: "pixelfed.social" },
+    { name: "Nostr", match: /primal\.net|snort\.social|nostr/i, domain: "primal.net" },
+    { name: "Sina Weibo", match: /weibo\.com|weibo\.cn/i, domain: "weibo.com" },
+    { name: "Xiaohongshu (RedNote)", match: /xiaohongshu\.com|xhslink\.com/i, domain: "xiaohongshu.com" },
+    { name: "Douyin", match: /douyin\.com|iesdouyin\.com/i, domain: "douyin.com" },
+    { name: "VK / VKontakte", match: /vk\.com|vkontakte\.ru/i, domain: "vk.com" },
+    { name: "Odnoklassniki (OK.ru)", match: /ok\.ru|odnoklassniki\.ru/i, domain: "ok.ru" },
+    { name: "ShareChat", match: /sharechat\.com/i, domain: "sharechat.com" },
+    { name: "Moj", match: /mojapp\.in/i, domain: "mojapp.in" },
+    { name: "Josh", match: /myjosh\.in/i, domain: "myjosh.in" },
+    { name: "Mixi", match: /mixi\.jp/i, domain: "mixi.jp" },
+    { name: "KakaoTalk", match: /kakao\.com|kakaocdn\.net/i, domain: "kakao.com" },
+    { name: "GitHub", match: /github\.com|raw\.githubusercontent\.com/i, domain: "github.com" },
+    { name: "Goodreads", match: /goodreads\.com/i, domain: "goodreads.com" },
+    { name: "Letterboxd", match: /letterboxd\.com/i, domain: "letterboxd.com" },
+    { name: "Strava", match: /strava\.com/i, domain: "strava.com" },
+    { name: "BeReal", match: /bereal\.com|bere\.al/i, domain: "bereal.com" },
+    { name: "Untappd", match: /untappd\.com/i, domain: "untappd.com" },
+    { name: "ArtStation", match: /artstation\.com/i, domain: "artstation.com" },
+    { name: "DeviantArt", match: /deviantart\.com/i, domain: "deviantart.com" },
+    { name: "Direct Media Stream", match: /\.(?:mp4|webm|mov|m4v|mkv|avi|mp3|wav|m4a|flac|ogg|opus|aac)(?:\?|$)/i, domain: "direct" }
+  ];
+
+  function detectPlatformFromUrl(val) {
+    if (!val || val.trim().length < 3) return null;
+    const clean = val.trim();
+    for (const p of PLATFORMS_MAP) {
+      if (p.match.test(clean)) return p;
+    }
+    if (/^https?:\/\//i.test(clean) || /^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}/i.test(clean)) {
+      return { name: "Web / Media Link", domain: "web" };
+    }
+    return null;
+  }
+
+  function updatePlatformDetectionUI() {
+    const val = urlInput ? urlInput.value : '';
+    const plat = detectPlatformFromUrl(val);
+
+    platChips.forEach(c => c.classList.remove('active-detected'));
+
+    if (plat && platformDetectedPill && detectedPlatformName) {
+      detectedPlatformName.textContent = `Detected: ${plat.name}`;
+      platformDetectedPill.classList.remove('hidden');
+
+      if (plat.domain) {
+        const matchingChip = document.querySelector(`.plat-chip[data-domain="${plat.domain}"]`);
+        if (matchingChip) {
+          matchingChip.classList.add('active-detected');
+          try {
+            matchingChip.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          } catch (_) {}
+        }
+      }
+    } else if (platformDetectedPill) {
+      platformDetectedPill.classList.add('hidden');
+    }
+  }
+
+  if (urlInput) {
+    urlInput.addEventListener('input', updatePlatformDetectionUI);
+    urlInput.addEventListener('paste', () => setTimeout(updatePlatformDetectionUI, 50));
+  }
+
+  // Category Filtering for Platform Hub
+  platTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      platTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const cat = tab.getAttribute('data-cat');
+      platChips.forEach(chip => {
+        if (cat === 'all' || chip.getAttribute('data-cat') === cat) {
+          chip.classList.remove('dimmed');
+          chip.style.display = 'inline-flex';
+        } else {
+          chip.classList.add('dimmed');
+          chip.style.display = 'none';
+        }
+      });
+    });
+  });
+
+  // Clicking any platform chip
+  platChips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      const name = chip.textContent.trim();
+      const domain = chip.getAttribute('data-domain');
+      if (domain === 'direct') {
+        showToast("Drop or paste any direct MP4, WEBM, MOV, MP3, or WAV link!");
+      } else {
+        showToast(`Paste any ${name} post, video, audio or reel link into the box!`);
+      }
+      if (urlInput) {
+        urlInput.focus();
+      }
+    });
+  });
+
   sampleTags.forEach(tag => {
     tag.addEventListener('click', () => {
       const sample = tag.getAttribute('data-sample');
       if (sample) {
         urlInput.value = sample;
+        updatePlatformDetectionUI();
         urlForm.dispatchEvent(new Event('submit'));
       }
     });
@@ -245,13 +427,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const match = raw.match(/https?:\/\/[^\s<>"')\]]+/i);
     let url = match ? match[0].replace(/[.,;:]+$/, '') : raw;
 
-    // 2. If user pasted domain without protocol (e.g. instagram.com/reel/..., youtu.be/...)
+    // 2. If user pasted domain without protocol (e.g. threads.net/..., twitch.tv/..., bilibili.com/...)
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      if (/^(?:www\.)?(?:youtube\.com|youtu\.be|instagram\.com|tiktok\.com|twitter\.com|x\.com|facebook\.com|fb\.watch|soundcloud\.com|spotify\.com|apple\.com|vimeo\.com|reddit\.com)/i.test(url)) {
+      if (/^(?:www\.|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/.*)?$)/i.test(url)) {
         url = 'https://' + url;
       }
     }
     urlInput.value = url;
+    updatePlatformDetectionUI();
 
     // 3. If user typed/pasted a song title, artist, or query directly (no http/https link)
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -275,7 +458,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       advancePipelineStep(1, "Analyzing first 20 seconds of audio...");
       
-      const response = await fetch(getApiUrl('/api/recognize/url'), {
+      const response = await fetchWithCloudFailover('/api/recognize/url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url })
@@ -475,7 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       advancePipelineStep(1, "Processing 44.1kHz audio stream with FFmpeg...");
 
-      const response = await fetch(getApiUrl('/api/recognize/file'), {
+      const response = await fetchWithCloudFailover('/api/recognize/file', {
         method: 'POST',
         body: formData
       });
@@ -617,7 +800,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       advancePipelineStep(1, "FFmpeg normalizer converting voice/sound clip...");
 
-      const response = await fetch(getApiUrl('/api/recognize/mic'), {
+      const response = await fetchWithCloudFailover('/api/recognize/mic', {
         method: 'POST',
         body: formData
       });

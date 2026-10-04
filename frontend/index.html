@@ -155,11 +155,109 @@
               </button>
             </div>
 
-            <div class="platform-chips">
-              <span class="chip">YouTube & Shorts</span>
-              <span class="chip">SoundCloud</span>
-              <span class="chip">Direct MP4 / WEBM</span>
-              <span class="chip">TikTok / Reels</span>
+            <!-- Live Real-Time Platform Detection Badge -->
+            <div class="platform-detected-pill hidden" id="platformDetectedPill">
+              <span class="detected-dot"></span>
+              <span class="detected-label" id="detectedPlatformName">Detected: Platform</span>
+              <span class="detected-status">Supported ✓</span>
+            </div>
+
+            <!-- Universal Platform Explorer Hub (60+ Networks) -->
+            <div class="platform-hub-card" id="platformHubCard">
+              <div class="platform-hub-header">
+                <div class="platform-hub-title-group">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                  <span class="platform-hub-title">Supported Networks & Media Sources</span>
+                </div>
+                <span class="platform-hub-count">60+ Global Platforms</span>
+              </div>
+
+              <!-- Category Filter Tabs -->
+              <div class="platform-filter-tabs" role="tablist">
+                <button type="button" class="plat-tab active" data-cat="all">All (60+)</button>
+                <button type="button" class="plat-tab" data-cat="social">Global Social</button>
+                <button type="button" class="plat-tab" data-cat="video">Video & Streams</button>
+                <button type="button" class="plat-tab" data-cat="chat">Chat & Messaging</button>
+                <button type="button" class="plat-tab" data-cat="forums">Forums & Knowledge</button>
+                <button type="button" class="plat-tab" data-cat="fediverse">Decentralized</button>
+                <button type="button" class="plat-tab" data-cat="regional">Regional Networks</button>
+                <button type="button" class="plat-tab" data-cat="niche">Niche & Audio</button>
+              </div>
+
+              <!-- Interactive Chips Grid -->
+              <div class="platform-chips-grid" id="platformChipsGrid">
+                <!-- Global Social -->
+                <span class="plat-chip highlight" data-cat="social" data-domain="facebook.com" title="Facebook Watch & Posts"><span class="plat-icon">📘</span>Facebook</span>
+                <span class="plat-chip highlight" data-cat="social" data-domain="instagram.com" title="Instagram Reels, Posts & Stories"><span class="plat-icon">📸</span>Instagram</span>
+                <span class="plat-chip highlight" data-cat="social" data-domain="x.com" title="X / Twitter Video & Spaces"><span class="plat-icon">𝕏</span>X (Twitter)</span>
+                <span class="plat-chip" data-cat="social" data-domain="threads.net" title="Threads Video & Audio"><span class="plat-icon">🧵</span>Threads</span>
+                <span class="plat-chip" data-cat="social" data-domain="snapchat.com" title="Snapchat Stories & Spotlights"><span class="plat-icon">👻</span>Snapchat</span>
+                <span class="plat-chip" data-cat="social" data-domain="linkedin.com" title="LinkedIn Video Posts"><span class="plat-icon">💼</span>LinkedIn</span>
+                <span class="plat-chip" data-cat="social" data-domain="pinterest.com" title="Pinterest Video Pins"><span class="plat-icon">📌</span>Pinterest</span>
+                <span class="plat-chip" data-cat="social" data-domain="tumblr.com" title="Tumblr Audio & Video"><span class="plat-icon">📜</span>Tumblr</span>
+
+                <!-- Video & Live Streaming -->
+                <span class="plat-chip highlight" data-cat="video" data-domain="youtube.com" title="YouTube & Shorts"><span class="plat-icon">▶️</span>YouTube & Shorts</span>
+                <span class="plat-chip highlight" data-cat="video" data-domain="tiktok.com" title="TikTok Videos & Sounds"><span class="plat-icon">🎵</span>TikTok</span>
+                <span class="plat-chip" data-cat="video" data-domain="twitch.tv" title="Twitch Streams & Clips"><span class="plat-icon">👾</span>Twitch</span>
+                <span class="plat-chip" data-cat="video" data-domain="vimeo.com" title="Vimeo Videos"><span class="plat-icon">🎬</span>Vimeo</span>
+                <span class="plat-chip" data-cat="video" data-domain="rumble.com" title="Rumble Video Clips"><span class="plat-icon">🥊</span>Rumble</span>
+                <span class="plat-chip" data-cat="video" data-domain="kick.com" title="Kick Live Streams"><span class="plat-icon">🟩</span>Kick</span>
+                <span class="plat-chip" data-cat="video" data-domain="dailymotion.com" title="Dailymotion Videos"><span class="plat-icon">📺</span>Dailymotion</span>
+                <span class="plat-chip" data-cat="video" data-domain="bilibili.com" title="Bilibili Videos & BGM"><span class="plat-icon">📺</span>Bilibili</span>
+                <span class="plat-chip" data-cat="video" data-domain="kuaishou.com" title="Kuaishou Video Clips"><span class="plat-icon">⚡</span>Kuaishou</span>
+
+                <!-- Messaging & Community Chat -->
+                <span class="plat-chip" data-cat="chat" data-domain="whatsapp.com" title="WhatsApp Audio & Video Links"><span class="plat-icon">💬</span>WhatsApp</span>
+                <span class="plat-chip highlight" data-cat="chat" data-domain="t.me" title="Telegram Audio & Video Clips"><span class="plat-icon">✈️</span>Telegram</span>
+                <span class="plat-chip highlight" data-cat="chat" data-domain="discord.com" title="Discord Media & CDN Attachments"><span class="plat-icon">🎮</span>Discord</span>
+                <span class="plat-chip" data-cat="chat" data-domain="messenger.com" title="Facebook Messenger"><span class="plat-icon">⚡</span>Messenger</span>
+                <span class="plat-chip" data-cat="chat" data-domain="signal.org" title="Signal Media Messages"><span class="plat-icon">🔒</span>Signal</span>
+                <span class="plat-chip" data-cat="chat" data-domain="wechat.com" title="WeChat Channels & Audio"><span class="plat-icon">🟢</span>WeChat</span>
+                <span class="plat-chip" data-cat="chat" data-domain="line.me" title="LINE VOOM & Media"><span class="plat-icon">💚</span>LINE</span>
+                <span class="plat-chip" data-cat="chat" data-domain="viber.com" title="Viber Channels"><span class="plat-icon">💜</span>Viber</span>
+                <span class="plat-chip" data-cat="chat" data-domain="qq.com" title="QQ Audio & Music"><span class="plat-icon">🐧</span>QQ</span>
+                <span class="plat-chip" data-cat="chat" data-domain="slack.com" title="Slack Audio & Video Files"><span class="plat-icon">🟪</span>Slack</span>
+
+                <!-- Discussion Forums & Knowledge Sharing -->
+                <span class="plat-chip highlight" data-cat="forums" data-domain="reddit.com" title="Reddit & v.redd.it Videos"><span class="plat-icon">🤖</span>Reddit</span>
+                <span class="plat-chip" data-cat="forums" data-domain="quora.com" title="Quora Video Answers"><span class="plat-icon">🔴</span>Quora</span>
+                <span class="plat-chip" data-cat="forums" data-domain="medium.com" title="Medium Embedded Media"><span class="plat-icon">✍️</span>Medium</span>
+                <span class="plat-chip" data-cat="forums" data-domain="stackoverflow.com" title="Stack Overflow Media"><span class="plat-icon">🥞</span>Stack Overflow</span>
+                <span class="plat-chip" data-cat="forums" data-domain="substack.com" title="Substack Podcasts & Video"><span class="plat-icon">📑</span>Substack</span>
+                <span class="plat-chip" data-cat="forums" data-domain="news.ycombinator.com" title="Hacker News"><span class="plat-icon">🟧</span>Hacker News</span>
+
+                <!-- Decentralized & Open-Source (Fediverse / AT Protocol) -->
+                <span class="plat-chip highlight" data-cat="fediverse" data-domain="bsky.app" title="Bluesky Video Posts"><span class="plat-icon">🦋</span>Bluesky</span>
+                <span class="plat-chip highlight" data-cat="fediverse" data-domain="mastodon.social" title="Mastodon Fediverse Media"><span class="plat-icon">🐘</span>Mastodon</span>
+                <span class="plat-chip" data-cat="fediverse" data-domain="lemmy.world" title="Lemmy Community Video"><span class="plat-icon">🌐</span>Lemmy</span>
+                <span class="plat-chip" data-cat="fediverse" data-domain="pixelfed.social" title="Pixelfed Media Posts"><span class="plat-icon">📷</span>Pixelfed</span>
+                <span class="plat-chip" data-cat="fediverse" data-domain="primal.net" title="Nostr Protocol Notes"><span class="plat-icon">🟣</span>Nostr</span>
+
+                <!-- Regional & Cultural Networks -->
+                <span class="plat-chip" data-cat="regional" data-domain="weibo.com" title="Sina Weibo (China)"><span class="plat-icon">👁️</span>Sina Weibo</span>
+                <span class="plat-chip highlight" data-cat="regional" data-domain="xiaohongshu.com" title="Xiaohongshu / RedNote"><span class="plat-icon">📕</span>Xiaohongshu (RedNote)</span>
+                <span class="plat-chip highlight" data-cat="regional" data-domain="douyin.com" title="Douyin (China)"><span class="plat-icon">🎵</span>Douyin</span>
+                <span class="plat-chip" data-cat="regional" data-domain="vk.com" title="VK / VKontakte (Russia & CIS)"><span class="plat-icon">🔵</span>VKontakte</span>
+                <span class="plat-chip" data-cat="regional" data-domain="ok.ru" title="Odnoklassniki (OK.ru)"><span class="plat-icon">🟠</span>OK.ru</span>
+                <span class="plat-chip" data-cat="regional" data-domain="sharechat.com" title="ShareChat (India)"><span class="plat-icon">🇮🇳</span>ShareChat</span>
+                <span class="plat-chip" data-cat="regional" data-domain="mojapp.in" title="Moj (India)"><span class="plat-icon">✨</span>Moj</span>
+                <span class="plat-chip" data-cat="regional" data-domain="myjosh.in" title="Josh (India)"><span class="plat-icon">🔥</span>Josh</span>
+                <span class="plat-chip" data-cat="regional" data-domain="mixi.jp" title="Mixi (Japan)"><span class="plat-icon">🇯🇵</span>Mixi</span>
+                <span class="plat-chip" data-cat="regional" data-domain="kakao.com" title="KakaoTalk / KakaoStory (Korea)"><span class="plat-icon">🟡</span>KakaoTalk</span>
+
+                <!-- Niche & Interest-Based -->
+                <span class="plat-chip highlight" data-cat="niche" data-domain="soundcloud.com" title="SoundCloud Tracks & Sets"><span class="plat-icon">☁️</span>SoundCloud</span>
+                <span class="plat-chip" data-cat="niche" data-domain="github.com" title="GitHub Code, Releases & Assets"><span class="plat-icon">🐙</span>GitHub</span>
+                <span class="plat-chip" data-cat="niche" data-domain="goodreads.com" title="Goodreads"><span class="plat-icon">📚</span>Goodreads</span>
+                <span class="plat-chip" data-cat="niche" data-domain="letterboxd.com" title="Letterboxd"><span class="plat-icon">🎞️</span>Letterboxd</span>
+                <span class="plat-chip" data-cat="niche" data-domain="strava.com" title="Strava"><span class="plat-icon">🏃</span>Strava</span>
+                <span class="plat-chip" data-cat="niche" data-domain="bereal.com" title="BeReal"><span class="plat-icon">⏱️</span>BeReal</span>
+                <span class="plat-chip" data-cat="niche" data-domain="untappd.com" title="Untappd"><span class="plat-icon">🍺</span>Untappd</span>
+                <span class="plat-chip" data-cat="niche" data-domain="artstation.com" title="ArtStation"><span class="plat-icon">🎨</span>ArtStation</span>
+                <span class="plat-chip" data-cat="niche" data-domain="deviantart.com" title="DeviantArt"><span class="plat-icon">🖌️</span>DeviantArt</span>
+                <span class="plat-chip highlight" data-cat="niche" data-domain="direct" title="Direct MP4, WEBM, MOV, MP3, WAV Streams"><span class="plat-icon">📼</span>Direct MP4/WEBM/MP3</span>
+              </div>
             </div>
 
             <div class="quick-samples">

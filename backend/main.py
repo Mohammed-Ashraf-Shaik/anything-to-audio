@@ -65,7 +65,7 @@ async def recognize_url(payload: UrlRecognizeRequest):
     match = re.search(r'https?://[^\s<>"\'\]]+', raw_input)
     if match:
         url = match.group(0).rstrip('.,;:')
-    elif re.match(r'^(?:www\.)?(?:youtube\.com|youtu\.be|instagram\.com|tiktok\.com|twitter\.com|x\.com|facebook\.com|fb\.watch|soundcloud\.com|spotify\.com|apple\.com|vimeo\.com|reddit\.com)', raw_input, re.IGNORECASE):
+    elif re.match(r'^(?:www\.|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/.*)?$)', raw_input):
         url = f"https://{raw_input}"
     else:
         # User entered a direct song title/search query like "Snowman Sia" or "Manwa Laage"

@@ -2777,4 +2777,199 @@ body.is-mobile-app .dev-link {
   100% { transform: scale(0.9); opacity: 0.6; }
 }
 
+/* ==========================================================================
+   Universal Platform Detection & Showcase Hub (60+ Networks)
+   ========================================================================== */
+
+/* Live Real-Time Platform Detection Pill */
+.platform-detected-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.45rem 1.1rem;
+  margin-top: 0.65rem;
+  background: rgba(229, 169, 80, 0.12);
+  border: 1px solid rgba(229, 169, 80, 0.45);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 14px rgba(229, 169, 80, 0.2);
+  animation: fadeInPill 0.3s ease-out;
+  transition: all 0.25s ease;
+}
+
+@keyframes fadeInPill {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.detected-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+  animation: pulseLight 1.5s infinite;
+}
+
+.detected-label {
+  color: #faf5ed;
+  font-size: 0.88rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.detected-status {
+  color: #10b981;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+/* Universal Platform Hub Card */
+.platform-hub-card {
+  margin-top: 1rem;
+  margin-bottom: 0.75rem;
+  padding: 1rem 1.2rem;
+  background: rgba(26, 20, 16, 0.65);
+  border: 1px solid rgba(140, 74, 34, 0.3);
+  border-radius: 14px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.platform-hub-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid rgba(140, 74, 34, 0.2);
+}
+
+.platform-hub-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #e5a950;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.platform-hub-count {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  background: rgba(229, 169, 80, 0.1);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(229, 169, 80, 0.2);
+}
+
+/* Platform Filter Tabs */
+.platform-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.85rem;
+}
+
+.plat-tab {
+  background: rgba(18, 14, 11, 0.8);
+  border: 1px solid rgba(140, 74, 34, 0.3);
+  color: var(--text-secondary);
+  font-family: var(--font-main);
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.plat-tab:hover {
+  color: #faf5ed;
+  border-color: rgba(229, 169, 80, 0.5);
+  background: rgba(229, 169, 80, 0.1);
+}
+
+.plat-tab.active {
+  color: #120e0b;
+  background: linear-gradient(135deg, #e5a950 0%, #c8732a 100%);
+  border-color: #e5a950;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(229, 169, 80, 0.3);
+}
+
+/* Platform Chips Grid */
+.platform-chips-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 0.3rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(229, 169, 80, 0.4) transparent;
+}
+
+.platform-chips-grid::-webkit-scrollbar {
+  width: 5px;
+}
+.platform-chips-grid::-webkit-scrollbar-thumb {
+  background: rgba(229, 169, 80, 0.35);
+  border-radius: 10px;
+}
+
+.plat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.7rem;
+  background: rgba(22, 17, 14, 0.75);
+  border: 1px solid rgba(140, 74, 34, 0.28);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+
+.plat-chip .plat-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.plat-chip:hover {
+  background: rgba(229, 169, 80, 0.15);
+  border-color: rgba(229, 169, 80, 0.5);
+  color: #faf5ed;
+  transform: translateY(-1px);
+}
+
+.plat-chip.highlight {
+  border-color: rgba(229, 169, 80, 0.4);
+  background: rgba(229, 169, 80, 0.08);
+  color: #f5d09b;
+}
+
+.plat-chip.active-detected {
+  background: linear-gradient(135deg, rgba(229, 169, 80, 0.3) 0%, rgba(200, 115, 42, 0.4) 100%);
+  border-color: var(--neon-cyan);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(229, 169, 80, 0.35);
+  font-weight: 700;
+  transform: scale(1.05);
+}
+
+.plat-chip.dimmed {
+  opacity: 0.25;
+  pointer-events: none;
+}
+
 
